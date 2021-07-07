@@ -62,7 +62,11 @@ def sharpe_ratio(r):
     """
     #read data from french-fama to extract monthly rf
     rf = pd.DataFrame(pd.read_csv('F-F_Research_Data_Factors.CSV',header=0,index_col=0,parse_dates=True,na_values=-99.99)['RF']/100)
-    rf.index = pd.to_datetime(rf.index,format="%Y%m").to_period('M') # format index to datetime
+    
+    # format index to datetime
+    rf.index = pd.to_datetime(rf.index,format="%Y%m").to_period('M') 
+    r.index = pd.to_datetime(r.index,format="%Y%m").to_period('M')
+    
     f = pd.concat([rf[r.index[0]:r.index[-1]],r],axis=1) # combine rf and r 
     f['excess_r'] = f.iloc[:,1] - f.iloc[:,0] # excess return
     ann_vol = erk.annual_vol(r,12) # annual std from montly return
@@ -385,6 +389,100 @@ def stockprice_to_monthlyrate_1(m):
     rate_m = rate_d.resample('M').apply(erk.compound) #monthly rate of return
     return rate_m
 
+def monthly_heatmap_single(x,start_date,end_date):
+    """
+    Returns heatmap of monthly return for a single stock.
+    Reminder. This function only works for a single stock 
+    """  
+    
+    d = (stock_data(x,start_date,end_date)) #daily stock price
+    rate_m = stockprice_to_monthlyrate_1(d) # simple monthly return 
+    rate_m.index = rate_m.index.to_period('M')
+
+    rate = rate_m.copy()
+    # configure for the size of the heatmap based on how many years it has 
+    r = math.ceil(rate_m.shape[0]/12) *3
+    l = r *3 +3
+    if r < 7:
+        f_size =10
+    else:
+        f_size =20
+
+    rate['month'] = [i.month for i in rate.index]
+    rate['year'] = [i.year for i in rate.index]
+    rate = rate.groupby(['month','year']).mean()
+    rate = rate.unstack(level=0)
+
+    fig, ax = plt.subplots(figsize=(l,r))
+    sn.heatmap(rate,annot=True,square=True,cmap='RdYlGn',fmt=".2f",annot_kws={"fontsize":f_size},linewidths=.5)
+
+    # xticks
+    ax.xaxis.tick_bottom()
+    xticks_labels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun','Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    plt.xticks(np.arange(12) + .5,labels=xticks_labels,fontsize=f_size) # replace 1,2,3 .. with jan, feb, march ....
+
+    # ysticks
+    plt.yticks(rotation=0,fontsize=f_size) # rotate yticks 
+    # axis labels
+    plt.xlabel('')
+    plt.ylabel('')
+    title = x + " monthly return"  + ' from '   + start_date + ' to '  + end_date 
+    plt.title(title,fontsize = f_size +5)
+    plt.show()
+
+def monthly_heatmap_mutiple(stocks='AAPL,NVDA',start_date='2019',end_date='2020'):
+    """
+    Returns heatmap of monthly return for multiple stocks.
+    Reminder. This function only works for 2 or more stocks 
+    """
+    from collections import Counter
+    s = stocks.split(',') # list of stocks 
+    d = (stock_data(stocks,start_date,end_date)) #daily stock price
+    rate_m = stockprice_to_monthlyrate_1(d) # simple monthly return 
+    rate_m.index = rate_m.index.to_period('M')
+    rate = rate_m.copy()
+    
+    # configure of the heatmap based on number of years and number of stocks 
+    r = (math.ceil(rate_m.shape[0]/12) *3) * math.ceil(len(s)/2)
+    l = (r *3 +3) *  math.ceil(len(s)/2)
+    #font size 
+    if r < 7:
+        f_size =10
+    else:
+        f_size =20
+    # modify origininal dataframe so it could be used for heatmap
+    month = [i.month for i in rate.index]  # extracting month from the date
+    year = [i.year for i in rate.index] # extracting year from the date 
+    rate['month'] = month
+    rate['year'] = year 
+    rate = rate.groupby(['month','year']).mean()
+    rate = rate.unstack(level=1)
+
+    #helper method to select columns in multi column system in a df
+    years = len(set(year)) # total number of years 
+    l1 = list(np.arange(len(s)*years)) # l1 is a list of 1,2,3,4,5,6 ........
+    l2 = [l1[i:i+years] for i in range(0,len(l1),years)] # l2 is a list of (1,2), (3,4), (5,6)
+
+    fig, ax = plt.subplots(len(s),figsize=(l,r)) #len(s) is how many subplots we have 
+
+    for i in range(len(s)):
+        #heat map 
+        sn.heatmap(rate.iloc[:,l2[i]].transpose(),annot=True,square=True,cmap='RdYlGn',fmt=".2f",annot_kws={"fontsize":f_size},linewidths=.5,ax=ax[i])
+        ax[i].set_title(s[::-1][i],fontsize=f_size) # title. s [::1] is method to reverse a list   
+
+        #xticks
+        xticks_labels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun','Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+        ax[i].set_xticklabels(xticks_labels,fontsize=f_size) # show text . get_xticklabels function will return the defauft tick labels 
+
+        #yticks
+        ax[i].set_yticklabels(set(year),rotation=0,fontsize=f_size) # display year label and rotate it  . set(year) returns unique elements in list of year 
+
+        #labels
+        ax[i].set_xlabel('')
+        ax[i].set_ylabel('')
+
+    plt.tight_layout() # more space between subplots 
+    
 def stock_price(x='AAPL',start_date='12-2019',end_date='02-2020',options=1):
     """
     Extract stock prices and show their summary statistics from yahoo finance
@@ -540,128 +638,98 @@ def stockprice_visualization():
                                                                description=' ')
                         )
     display(c)
-def portfolio(x='AAPL',weight='1',initial=1,start_date='2019',end_date='2020',benchmark='',show_stats='No'):
+def portfolio(x='AAPL',weight='1',initial=1,start_date='2019',end_date='04-2021',benchmark='',show_stats='No'):
     """
-    Implements and shows porfolio visualization
+    Implements and shows portfolio visualization.
     """
     if x =='' or weight =='':
         print('Please type in the stock symbols')
-    else:
-        #convert list of type string weights to type float weights 
-        w = weight.split(',')
-        for i in range(0,len(w)):
-            w[i] = float(w[i])
+    
+    #convert list of type string weights to type float weights 
+    w = weight.split(',')
+    for i in range(0,len(w)):
+        w[i] = float(w[i])
+
+    # total of weights = 1 
+    if np.sum(w) != 1 : 
+        raise ValueError('Sum of weights has to be 1')
+
+    m = pd.DataFrame(stock_data(x,start_date,end_date))
+    if len(w) != m.shape[1]:  # numbers of stocks = numbers of weights
+        raise ValueError('# of stocks and # of weights have to be the same')       
+    """
+    Set up the portfolio
+    """
+    rate_m = stockprice_to_monthlyrate_1(m)
+    rate_f = pd.DataFrame(np.sum(np.multiply(w,rate_m),axis=1)) #w1 *r1 + w2*r2 +....+ wn *rn
+    rate_f1 = initial * (1 + rate_f).cumprod() # (1+r)(1+r1)...
+    rate_f1.iloc[0] = initial # set the first row to initial investment so it looks better on graph
+    rate_f.columns = ['Your Portfolio']
+    rate_f1.columns =['Your Portfolio']
+    currency = "${:,.2f}".format(initial)
+
+    """
+    Set up the benchmark if benchmark is not none 
+    Display summary stats (optional) + graph 
+    """
+    if benchmark != '':
+        b = pd.DataFrame(stock_data(benchmark,start_date,end_date))
+        rate_benchmark = stockprice_to_monthlyrate_1(b) # monthly return of benchmark
+        rate_b1 = initial * (1 + rate_benchmark).cumprod() # cumulative returns 
+        rate_b1.iloc[0] = initial  # set first row to initial for graph purposes 
+        column_list = rate_b1.columns.to_list() # return column names  
         
-        # total of weights = 1 
-        if np.sum(w) != 1 : 
-            raise ValueError('Sum of weights has to be 1')
         
-        m = pd.DataFrame(stock_data(x,start_date,end_date))
-        if len(w) != m.shape[1]:  # numbers of stocks = numbers of weights
-            raise ValueError('# of stocks and # of weights have to be the same')       
-        """
-        Set up the portfolio
-        """
-        rate_m = stockprice_to_monthlyrate_1(m)
-        rate_f = pd.DataFrame(np.sum(np.multiply(w,rate_m),axis=1)) #w1 *r1 + w2*r2 +....+ wn *rn
-        rate_f1 = initial * (1 + rate_f).cumprod() # (1+r)(1+r1)...
-        rate_f1.iloc[0] = initial # set the first row to initial investment so it looks better on graph
-        rate_f1.columns =['Your Porfolio']
-        rate_f1 = rate_f1.round(2)
-        currency = "${:,.2f}".format(initial)        
-        """
-        Set up summary statistics table
-        """
+        # add 'benchmark' prefix  to the stocks
+        for i in range(len(column_list)):
+            column_list[i] = 'Benchmark (' + column_list[i] +')'
+        rate_b1.columns = column_list
+        rate_benchmark.columns = column_list 
+        
+        combining = rate_f1.merge(rate_b1,left_index=True,right_index=True) # combining benchmark, your portfolio dataframes
+        
+        #summary statistic table 
+        summary_stats_df = rate_f.merge(rate_benchmark,left_index=True,right_index=True) # merge your portfolio with benchmark stocks 
+        ending_balance = pd.DataFrame(combining.iloc[-1,:]) # ending balance
+        ending_balance.columns = ['Ending Balance'] # change column name to ending balance 
         if show_stats =='Yes':
-            s = summary_stats(rate_f)
-            s.index = ['Your Portfolio']
-            print('\n'*2)
-            if bool(re.search(r"\s",x)) is False: #checking if there is space in string
-                s.index=['Your Porfolio']    
-            # if benchmark = yes, show its statistic along with portfolio
-            if benchmark!= '':
-                c = pd.DataFrame(stock_data(benchmark,start_date,end_date))
-                r_b = stockprice_to_monthlyrate(c)
-                s1 = summary_stats(r_b)
-                s1.index=['Benchmark (' + benchmark + ')']
-                s2 = pd.concat([s,s1],axis=0)
-                display(HTML(s2.to_html())) 
-            else:
-                display(HTML(s.to_html()))
-            print('\n'*2)
+            s = pd.concat([ending_balance,summary_stats(summary_stats_df)],axis=1) # display key stat + ending balance 
+            s.iloc[:,0] = s.iloc[:,0].astype(float).map(lambda n: '${:,.2f}'.format(n)) # format ending balance 
+            display(s)
             
-        """
-        Set up the benchmark
-        """
-        if benchmark != '':
-            b = pd.DataFrame(stock_data(benchmark,start_date,end_date))
-            rate_b = stockprice_to_monthlyrate_1(b)
-            rate_b1 = initial * (1 + rate_b).cumprod()
-            rate_b1.iloc[0] = initial
-            column_list = rate_b1.columns.to_list() 
-            
-            # add 'benchmark' prefix  to the stocks
-            for i in range(len(column_list)):
-                column_list[i] = 'Benchmark (' + column_list[i] +')'
-            rate_b1.columns = column_list  
-            combining = rate_f1.merge(rate_b1,left_index=True,right_index=True)
-            #unpivot data for the purpose of graphing 
-            stocknames = combining.columns.to_list()
-            combining.reset_index(inplace=True) # use index as column
-            combining_1 = pd.melt(combining,id_vars=['index'],value_vars=stocknames) # rearange from wide data to long data for the purpose of graphing
-            
-            
-            # set up graph with portfolio and benchmark
-            var = combining_1['variable'] 
-            currency = "${:,.2f}".format(initial)
-            fig = px.line(combining_1,x=combining_1['index'],y=combining_1['value'], color=combining_1['variable'],
+        #unpivot data for the purpose of graphing 
+        stocknames = combining.columns.to_list()
+        combining.reset_index(inplace=True) # use index as column
+        combining_1 = pd.melt(combining,id_vars=['index'],value_vars=stocknames) # rearange from wide data to long data for the purpose of graphing
+        
+        # set up graph with portfolio and benchmark
+        var = combining_1['variable'] 
+        fig = px.line(combining_1,x=combining_1['index'],y=combining_1['value'], color=combining_1['variable'],
                       title = 'Your investment of ' + currency + ' from ' + start_date + ' to ' + end_date,
-                      labels={'variable':' ','index':'Year','value':'Porfolio Balance'}    
+                      labels={'variable':' ','index':'Year','value':'Portfolio Balance'}    
                      )
-            fig.update_yaxes(tickprefix="$", # the y-axis is in dollars
+        fig.update_yaxes(tickprefix="$", # the y-axis is in dollars
                              showgrid=False 
                             )
-            fig.update_xaxes(showgrid=False
-                             ,spikemode ='across',spikedash='dot', # enable spike mode
-                             spikecolor='#999999',spikesnap='cursor') # change spike color 
-            
-            fig.update_layout(hovermode="x",
-                              hoverdistance=1000,  # Distance to show hover label of data point
-                              spikedistance=1000) # Distance to show spike     
-            fig.update_traces(mode = 'lines',
-                              hovertemplate ='<br>%{y:$,.2f} <extra></extra> <br>%{x|%b %Y}')
-                              
-            return fig.show()
-           
-        """
-        set up the main graph
-        """
-        fig = px.line(rate_f1,x=rate_f1.index,y=rate_f1['Your Porfolio'],
-                      title = 'Your investment of ' + currency + ' from ' + start_date + ' to ' + end_date,
-                     labels={'index':'Year'}
-                     )
-        fig.update_yaxes( tickprefix="$", # the y-axis is in dollars
-                          showgrid=False,
-                          spikemode ='toaxis',spikedash='dot', # enable spike mode
-                          spikecolor='#999999',spikesnap='cursor' # change spike color 
-                        )
-        fig.update_xaxes(showgrid=False,
-                         spikemode ='toaxis',spikedash='dot', # enable spike mode
-                         spikecolor='#999999',spikesnap='cursor' # change spike color
-                        )
+        fig.update_xaxes(showgrid=False
+                         ,spikemode ='across',spikedash='dot', # enable spike mode
+                         spikecolor='#999999',spikesnap='cursor') # change spike color 
+
+        fig.update_layout(hovermode="x",
+                          hoverdistance=1000,  # Distance to show hover label of data point
+                          spikedistance=1000) # Distance to show spike     
         fig.update_traces(mode = 'lines',
-                         hovertemplate ='Your Porfolio: %{y:$,.2f} <br> Date: %{x|%b %Y}') # format portfolio value and date month/year
-        
+                          hovertemplate ='<br>%{y:$,.2f} <extra></extra> <br>%{x|%b %Y}')
+
         return fig.show()
-        
-            
+
 def show():
     control = widgets.interact(portfolio,x=widgets.Text(value='',description='Ticker(s)',placeholder='AAPL,SPY,etc..'),
                      weight =widgets.Text(value='',description='Weight(s)',placeholder='0.1,0.2,0.3,etc...'),
                      benchmark = widgets.Text(value='',description='Benchmark'),
                      initial = widgets.FloatText(value=10000,desciption='Intitial'),
                      start_date =widgets.Text(value='2019',description='Start Date'),
-                     end_date = widgets.Text(value='2020',description='End Date'),
+                     end_date = widgets.Text(value='04-2021',description='End Date'),
                      show_stats=widgets.RadioButtons(options=['No','Yes'],description='Statistics'))
                      
                      
