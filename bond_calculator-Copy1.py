@@ -371,20 +371,13 @@ def stock_data(x,start_date,end_date):
         new_range.columns=[x]
     return new_range
 
-def stockprice_to_monthlyrate(m):
+def stockprice_to_monthlyrate_1(x,start_date,end_date):
     """
     convert daily stock price to monthly rate of return 
     """
-    rate_d_1 = m.pct_change() #daily rate of return
-    rate_d = rate_d_1.dropna()
-    rate_m = rate_d.resample('M').apply(erk.compound).to_period('M') #monthly rate of return
-    return rate_m
-
-def stockprice_to_monthlyrate_1(m):
-    """
-    convert daily stock price to monthly rate of return and having 1s as the first row
-    """
-    rate_d_1 = m.pct_change() #daily rate of return
+    # daily stock price 
+    d = stock_data(x,start_date,end_date)
+    rate_d_1 = d.pct_change() #daily rate of return
     rate_d = rate_d_1.dropna()
     rate_m = rate_d.resample('M').apply(erk.compound) #monthly rate of return
     return rate_m
@@ -394,9 +387,7 @@ def monthly_heatmap_single(x,start_date,end_date):
     Returns heatmap of monthly return for a single stock.
     Reminder. This function only works for a single stock 
     """  
-    
-    d = (stock_data(x,start_date,end_date)) #daily stock price
-    rate_m = stockprice_to_monthlyrate_1(d) # simple monthly return 
+    rate_m = stockprice_to_monthlyrate_1(x,start_date,end_date) # simple monthly return 
     rate_m.index = rate_m.index.to_period('M')
 
     rate = rate_m.copy()
@@ -437,8 +428,7 @@ def monthly_heatmap_mutiple(stocks='AAPL,NVDA',start_date='2019',end_date='2020'
     """
     from collections import Counter
     s = stocks.split(',') # list of stocks 
-    d = (stock_data(stocks,start_date,end_date)) #daily stock price
-    rate_m = stockprice_to_monthlyrate_1(d) # simple monthly return 
+    rate_m = stockprice_to_monthlyrate_1(stocks,start_date,end_date) # simple monthly return 
     rate_m.index = rate_m.index.to_period('M')
     rate = rate_m.copy()
     
@@ -481,123 +471,123 @@ def monthly_heatmap_mutiple(stocks='AAPL,NVDA',start_date='2019',end_date='2020'
         ax[i].set_xlabel('')
         ax[i].set_ylabel('')
 
-    plt.tight_layout() # more space between subplots 
-    
-def stock_price(x='AAPL',start_date='12-2019',end_date='02-2020',options=1):
+    plt.tight_layout() # more space between subplots
+
+def balance_income_cash(stocks,k,features):
+    """
+    helper function for stock_price funtion to display balance sheet, income statement and cashflow
+    """
+    from termcolor import colored
+    if k == 'balance':
+        n = [pd.DataFrame((si.get_balance_sheet(i).iloc[:,[0,1]])) for i in stocks] #extract data from yf and store dataframes in a list
+        print(colored('\nSELECTED BALANCE SHEET DATA \n',attrs=['bold']))
+        print('in millions')
+    elif k == 'income':
+        n = [pd.DataFrame((si.get_income_statement(i).iloc[:,[0,1]])) for i in stocks] # extract data from yf and store dataframes in a list
+        print(colored('\nSELECTED INCOME STATEMENT DATA \n',attrs=['bold']))
+        print('in millions')
+    elif k == 'cash':
+        n = [pd.DataFrame((si.get_cash_flow(i).iloc[:,[0,1]])) for i in stocks] #extract data from yf and store dataframes in a list
+        print(colored('\nSELECTED CASH FLOW DATA \n',attrs=['bold']))
+        print('in millions')
+    r = pd.concat(n,axis=1) # concat df in the list to be 1 big df
+    for i in features:    # if metric not in original df, assign it as n/a value
+        if i not in r.index:
+            r.loc[i,:]=float("NaN")
+    r= r.loc[features,:] # only choose metrics from features list
+    for i in r.index.to_list():
+        r.loc[i,:] = r.loc[i,:].astype(float).map(lambda n: str('{:,.2f}'.format(n/10**6))) # formatting
+    r.columns = pd.MultiIndex.from_tuples(zip(np.repeat(stocks, 2), r.columns)) # nested columns
+    return r
+
+
+def stock_price(x='AAPL',start_date='2019',end_date='2020',options=1):
     """
     Extract stock prices and show their summary statistics from yahoo finance
-    """    
+    """
+    #helper function to display balancesheet,income statement and cashflow
     if x =='':
         print('Please type in the stock symbols')
     else:
-        stocks = list(x.split(','))
-        from termcolor import colored
-        d = (stock_data(x,start_date,end_date)) #daily stock price
-        rate_m = stockprice_to_monthlyrate_1(d) # simple monthly return 
-        m = pd.DataFrame(d.iloc[1:]).resample('BMS').first() #stock monthly price- first day of the month
-        m.index.name = 'Date'
-        rate_m_1 = rate_m
-        rate_m_1.index = rate_m_1.index.to_period('M')
-        
-        
-        stocknames = m.columns.to_list() # getting stock name
-        m.reset_index(inplace=True) # use index as column
-        m_1 = pd.melt(m,id_vars=['Date'],value_vars=stocknames) # rearange from wide data to long data
-        """
-        constructing interactive graph show month
-        """
-        if options ==1:
-            fig = px.area(m_1,x=m_1['Date'],y=m_1["value"],color=m_1['variable'],
-                         title = 'Stock price of' + ' ' +  x + ' from ' + start_date + ' to ' + end_date,
-                         labels={'variable': 'Stocks', 'value':'Price'},
+        stocks = list(x.split(',')) 
+        #constructing monthly return graph with interaction 
+        if options ==1 : 
+            d = stock_data(x,start_date,end_date)
+            d.index.name = 'Date' 
+            stocknames = d.columns.to_list() # getting stock name
+            d.reset_index(inplace=True) # use index as column
+            d_1 = pd.melt(d,id_vars='Date',value_vars=stocknames) # rearange from wide data to long data
+            
+            fig = px.area(d_1,x=d_1['Date'],y=d_1["value"],color=d_1['variable'],
+                         title = x + ' stock price' + ' from ' + start_date + ' to ' + end_date,
+                         labels={'variable': 'Stocks'},
                          color_discrete_map = {x : 'lightsteelblue'},
-                         template= 'simple_white'
-                         )
-            fig.update_yaxes(tickprefix="$",showgrid=False,spikemode ='toaxis',
-                             spikedash='dot') # y-axis in dollar sign
-            fig.update_xaxes(showgrid=False,
+                         template= 'simple_white')
+
+            fig.update_yaxes(title_text=' ',tickprefix="$",showgrid=False,) # y-axis in dollar sign
+
+            fig.update_xaxes(title_text=' ',showgrid=False,
                              spikemode ='toaxis',spikedash='dot', # enable spike mode
                              spikecolor='#999999',spikesnap='cursor') # change spike color 
 
             # modified hovertemplate properties. 
             fig.update_traces(mode="lines", 
-                              hovertemplate='<i>Price</i>: %{y:$.2f} <extra></extra>  <br>' '<i>Date</i> : %{x|%d %b %Y}' # show price and date
-                              ) 
+                              hovertemplate='%{y:$.2f} <extra> </extra>', # show price 
+                              hoverlabel=dict(bgcolor="black",font_color='white'))
+
+            fig.update_layout(hovermode='x') # show the date on axis                     
+        
+        #constructing summary statistics
+        elif options ==2: 
+            rate_m = stockprice_to_monthlyrate_1(x,start_date,end_date) # simple monthly return
+            r_summary_stats = summary_stats(rate_m)
             
-            
-        #displaying summary statistics
-        elif options ==2:
-            r= summary_stats(rate_m_1)
-            
-        #displaying monthly rate of return table
+        #constructing monthly rate of return table
         elif options ==3:
+            rate_m_1 = stockprice_to_monthlyrate_1(x,start_date,end_date) # simple monthly return
+            rate_m_1.index = rate_m_1.index.to_period('M')  # get rid of the date in mm/dd/yyyy
             for x in rate_m_1.columns.to_list():
                 rate_m_1[x] = rate_m_1[x].astype(float).map(lambda n: '{:.2%}'.format(n))  #change float to percentage
-            r = rate_m_1
-        
-        #display quote price
-        elif options == 4:              
+       
+        #constructing quote price table for stocks               
+        elif options ==4:
             l = [si.get_quote_table(s) for s in stocks] # extracting data from yahoo finance
-            r = pd.DataFrame(l).transpose() # dictionary -> df
-            r.columns = stocks
+            quote = pd.DataFrame(l).transpose() # dictionary -> df
+            quote.columns = stocks
+            quote.fillna(value=0,inplace=True)
             for i in ['Volume','Avg. Volume']:
-                r.loc[i,:] = r.loc[i,:].astype(int).map(lambda n: '{:,}'.format(n)) # formatting rows 
-        #display metrics 
-        elif options ==5:
+                if i in quote.index:
+                    quote.loc[i,:] = quote.loc[i,:].astype(int).map(lambda n: '{:,}'.format(n)) # formatting rows 
+
+        #constructing metrics 
+        elif options ==5 : 
             m = [(si.get_stats(s).set_index('Attribute')) for s in stocks] # extracting data from yahoo finance, store them in a list
-            r = pd.concat(m,axis=1) # a list of dataframes  -> df
-            r.columns = stocks
+            metrics= pd.concat(m,axis=1) # a list of dataframes  -> df
+            metrics.columns = stocks
             # remove the last digit for the index. ex: abcd1 
-            r_i = r.index.to_list() # list of index
+            r_i = metrics.index.to_list() # list of index
             for x in range(len(r_i)):
                 r_i[x] = r_i[x].rstrip(string.digits)
-            r.index = r_i
-            
-        #diplaying balancesheet
+            metrics.index = r_i
+        
         elif options ==6:
-            features = ['cash','netReceivables','inventory','totalCurrentAssets','propertyPlantEquipment','goodWill',
-                        'totalAssets','accountsPayable','shortLongTermDebt','totalCurrentLiabilities',
-                        'longTermDebt','totalLiab','retainedEarnings','commonStock','treasuryStock','totalStockholderEquity']
-            n = [pd.DataFrame((si.get_balance_sheet(i).iloc[:,[0,1]])) for i in stocks] #extract data from yf and store dataframes in a list
-            r = pd.concat(n,axis=1) # concat df in the list to be 1 big df
-            for i in features:    # if metric not in original df, assign it as n/a value
-                if i not in r.index:
-                    r.loc[i,:]=float("NaN")
-            r= r.loc[features,:] # only choose metrics from features list
-            for i in r.index.to_list():
-                r.loc[i,:] = r.loc[i,:].astype(float).map(lambda n: str('{:,.2f}'.format(n/10**6))) # formatting
-            r.columns = pd.MultiIndex.from_tuples(zip(np.repeat(stocks, 2), r.columns)) # nested columns 
+            features_balance = ['cash','netReceivables','inventory','totalCurrentAssets','propertyPlantEquipment','goodWill',
+            'totalAssets','accountsPayable','shortLongTermDebt','totalCurrentLiabilities',
+            'longTermDebt','totalLiab','retainedEarnings','commonStock','treasuryStock','totalStockholderEquity']
              
-        # income statement   
+            balance = balance_income_cash(stocks,'balance',features_balance)
         elif options ==7:
-            features = ['totalRevenue','costOfRevenue','grossProfit','totalOperatingExpenses','operatingIncome',
-                        'interestExpense','incomeBeforeTax','incomeTaxExpense','netIncome']
-            n = [pd.DataFrame((si.get_income_statement(i).iloc[:,[0,1]])) for i in stocks] # extract data from yf and store dataframes in a list
-            r = pd.concat(n,axis=1) # convert a list of df to df
-            for i in features:    # if metric not in original df, assign it as n/a value
-                if i not in r.index:
-                    r.loc[i,:]=float("NaN")
-            r= r.loc[features,:] # only choose metrics from features list
-            for i in r.index.to_list():
-                r.loc[i,:] = r.loc[i,:].astype(float).map(lambda n: str('{:,.2f}'.format(n/10**6))) # formatting
-            r.columns = pd.MultiIndex.from_tuples(zip(np.repeat(stocks, 2), r.columns)) # nested columns 
+            features_income = ['totalRevenue','costOfRevenue','grossProfit','totalOperatingExpenses','operatingIncome',
+            'interestExpense','incomeBeforeTax','incomeTaxExpense','netIncome']
             
-        # displaying cashflow
+            income = balance_income_cash(stocks,'income',features_income)
         elif options ==8:
-            features = ['netIncome','depreciation','totalCashFromOperatingActivities','capitalExpenditures',
-           'totalCashflowsFromInvestingActivities','issuanceOfStock','repurchaseOfStock','dividendsPaid',
-           'totalCashFromFinancingActivities']
+            features_cash = ['netIncome','depreciation','totalCashFromOperatingActivities','capitalExpenditures',
+            'totalCashflowsFromInvestingActivities','issuanceOfStock','repurchaseOfStock','dividendsPaid',
+            'totalCashFromFinancingActivities']
             
-            n = [pd.DataFrame((si.get_cash_flow(i).iloc[:,[0,1]])) for i in stocks] #extract data from yf and store dataframes in a list
-            r = pd.concat(n,axis=1) # concat df in the list to be 1 big df
-            for i in features:    # if metric not in original df, assign it as n/a value
-                if i not in r.index:
-                    r.loc[i,:]=float("NaN")
-            r= r.loc[features,:] # only choose metrics from features list 
-            for i in r.index.to_list():
-                r.loc[i,:] = r.loc[i,:].astype(float).map(lambda n: str('{:,.2f}'.format(n/10**6))) # formatting
-            r.columns = pd.MultiIndex.from_tuples(zip(np.repeat(stocks, 2), r.columns)) # nested columns 
-             
+            cash = balance_income_cash(stocks,'cash',features_cash)
+        
         # set up 'showing' button 
         button = widgets.Button(description="Result")
         output = widgets.Output()
@@ -607,18 +597,22 @@ def stock_price(x='AAPL',start_date='12-2019',end_date='02-2020',options=1):
         """
         def on_button_clicked(b):
             with output:
-                if options ==1:
+                if options ==1: # graph
                     return fig.show()
-                elif options ==6:
-                    print(colored('\nSELECTED BALANCE SHEET DATA \n',attrs=['bold']))
-                    print('in millions')
-                elif options ==7:
-                    print(colored('\nSELECTED CASH FLOW DATA \n',attrs=['bold']))
-                    print('in millions')
-                elif options ==8:
-                    print(colored('\nSELECTED CASH FLOW DATA \n',attrs=['bold']))
-                    print('in millions')
-                display(r) 
+                elif options ==2: # summary_stats
+                    display(r_summary_stats)
+                elif options ==3: #monthly return df
+                    display(rate_m_1)                    
+                elif options ==4: # quote price
+                    display(quote)  
+                elif options ==5: #metric
+                    display(metrics) 
+                elif options ==6: #balance sheet                  
+                    display(balance)
+                elif options ==7: # income statement
+                    display(income)
+                elif options ==8: #cashflow
+                    display(cash)
                 
         button.on_click(on_button_clicked)
            
@@ -626,7 +620,7 @@ def stockprice_visualization():
     "display stocks visualization, summary statistics with interaction"
     c = widgets.interact(stock_price,x=widgets.Text(value='',description='Tickers',placeholder='AAPL,SPY,etc..'),
                          start_date =widgets.Text(value='2019',description='Start Date'),
-                         end_date = widgets.Text(value='2020',description='End Date'),
+                         end_date = widgets.Text(value='2021',description='End Date'),
                          options=widgets.RadioButtons(options=[('Stock Price',1),
                                                                ('Summary Statistics',2),
                                                                ('Monthly returns',3),
@@ -635,15 +629,15 @@ def stockprice_visualization():
                                                                ('Balance Sheets',6),
                                                                ('Income Statements',7),
                                                                ('Cash flow statements',8)],
-                                                               description=' ')
-                        )
+                                                               description=' '))
     display(c)
+    
 def portfolio(x='AAPL',weight='1',initial=1,start_date='2019',end_date='04-2021',benchmark='',show_stats='No'):
     """
-    Implements and shows portfolio visualization.
+    Implements and shows portfolio visualization
     """
     if x =='' or weight =='':
-        print('Please type in the stock symbols')
+        raise ValueError('Please type in stock symbol(s)') 
     
     #convert list of type string weights to type float weights 
     w = weight.split(',')
@@ -653,14 +647,14 @@ def portfolio(x='AAPL',weight='1',initial=1,start_date='2019',end_date='04-2021'
     # total of weights = 1 
     if np.sum(w) != 1 : 
         raise ValueError('Sum of weights has to be 1')
-
-    m = pd.DataFrame(stock_data(x,start_date,end_date))
-    if len(w) != m.shape[1]:  # numbers of stocks = numbers of weights
+    
+    stocks = list(x.split(','))
+    if len(w) != len(stocks):  # numbers of stocks = numbers of weights
         raise ValueError('# of stocks and # of weights have to be the same')       
     """
     Set up the portfolio
     """
-    rate_m = stockprice_to_monthlyrate_1(m)
+    rate_m = stockprice_to_monthlyrate_1(x,start_date,end_date) # simple monthly return 
     rate_f = pd.DataFrame(np.sum(np.multiply(w,rate_m),axis=1)) #w1 *r1 + w2*r2 +....+ wn *rn
     rate_f1 = initial * (1 + rate_f).cumprod() # (1+r)(1+r1)...
     rate_f1.iloc[0] = initial # set the first row to initial investment so it looks better on graph
@@ -672,13 +666,11 @@ def portfolio(x='AAPL',weight='1',initial=1,start_date='2019',end_date='04-2021'
     Set up the benchmark if benchmark is not none 
     Display summary stats (optional) + graph 
     """
-    if benchmark != '':
-        b = pd.DataFrame(stock_data(benchmark,start_date,end_date))
-        rate_benchmark = stockprice_to_monthlyrate_1(b) # monthly return of benchmark
+    if benchmark !='':
+        rate_benchmark = stockprice_to_monthlyrate_1(benchmark,start_date,end_date) # monthly return of benchmark
         rate_b1 = initial * (1 + rate_benchmark).cumprod() # cumulative returns 
         rate_b1.iloc[0] = initial  # set first row to initial for graph purposes 
-        column_list = rate_b1.columns.to_list() # return column names  
-        
+        column_list = rate_b1.columns.to_list() # return column names     
         
         # add 'benchmark' prefix  to the stocks
         for i in range(len(column_list)):
@@ -709,8 +701,8 @@ def portfolio(x='AAPL',weight='1',initial=1,start_date='2019',end_date='04-2021'
                       labels={'variable':' ','index':'Year','value':'Portfolio Balance'}    
                      )
         fig.update_yaxes(tickprefix="$", # the y-axis is in dollars
-                             showgrid=False 
-                            )
+                         showgrid=True) 
+                            
         fig.update_xaxes(showgrid=False
                          ,spikemode ='across',spikedash='dot', # enable spike mode
                          spikecolor='#999999',spikesnap='cursor') # change spike color 
@@ -719,9 +711,42 @@ def portfolio(x='AAPL',weight='1',initial=1,start_date='2019',end_date='04-2021'
                           hoverdistance=1000,  # Distance to show hover label of data point
                           spikedistance=1000) # Distance to show spike     
         fig.update_traces(mode = 'lines',
-                          hovertemplate ='<br>%{y:$,.2f} <extra></extra> <br>%{x|%b %Y}')
+                          hovertemplate ='<br>%{y:$,.2f} <extra></extra>')
 
         return fig.show()
+    
+    """
+    show summary statistics and graph when benchmark is none 
+    """
+    # summary statistics table 
+    if show_stats =='Yes':
+        s = summary_stats(rate_f)
+        s.index = ['Your Portfolio'] # change index name
+        ending_balance = pd.DataFrame(rate_f1.iloc[-1,:]) # ending balance
+        ending_balance.columns = ['Ending Balance'] # change column name to ending balance 
+        s1 = pd.concat([ending_balance,s],axis=1)
+        s1.iloc[:,0] = s1.iloc[:,0].astype(float).map(lambda n: '${:,.2f}'.format(n)) # format ending balance 
+        print('\n'*2)
+        display(s1)
+        print('\n'*2)
+
+    # main graph 
+    fig = px.line(rate_f1,x=rate_f1.index,y=rate_f1['Your Portfolio'],
+                  title = 'Your investment of ' + currency + ' from ' + start_date + ' to ' + end_date,
+                 labels={'index':'Year'})
+                 
+    fig.update_yaxes( tickprefix="$",showgrid=True) # the y-axis is in dollars
+                    
+    fig.update_xaxes(showgrid=False,
+                     spikemode ='toaxis',spikedash='dot', # enable spike mode
+                     spikecolor='#999999',spikesnap='cursor') # change spike color
+                    
+    fig.update_traces(mode = 'lines',
+                     hovertemplate ='Your Portfolio: %{y:$,.2f}',
+                     hoverlabel=dict(bgcolor="black",font_color='white')) # format portfolio value and date month/year
+    
+    fig.update_layout(hovermode='x')
+    return fig.show()
 
 def show():
     control = widgets.interact(portfolio,x=widgets.Text(value='',description='Ticker(s)',placeholder='AAPL,SPY,etc..'),
@@ -739,8 +764,7 @@ def portfolio_optimization(x='AAPL,NVDA',your_weights = '.5,.5',riskfree_rate = 
     """
     Visualizing tangency and global min var portfolio for stocks in SP500
     """
-    stock_price = stock_data(x,start_date,end_date) # stock prices 
-    rate_m = stockprice_to_monthlyrate_1(stock_price) # simple monthly return 
+    rate_m = stockprice_to_monthlyrate_1(x,start_date,end_date) # simple monthly return 
     er = erk.annualize_return(rate_m,12) # portfolio annual return
     cov = rate_m.cov()
     
@@ -793,7 +817,7 @@ def portfolio_optimization(x='AAPL,NVDA',your_weights = '.5,.5',riskfree_rate = 
     weights = pd.DataFrame({'Stocks':stocks,'Sharpe Weights':sharpe_w, 'Min Variance Weights':minvariance_w}).round(3)
     weights = weights.set_index(weights.columns[0]) # set first column as index
     weights = percent_format(weights)
-    display(HTML(weights.to_html()))    
+    display(weights)    
     """
     plot frontier and highlight sharpe ratio in plotly
     """
@@ -821,13 +845,10 @@ def portfolio_optimization(x='AAPL,NVDA',your_weights = '.5,.5',riskfree_rate = 
                             
     
     fig.add_annotation(x=sharpe_v,y=sharpe_r,text=" Max Sharpe <br> portfolio",arrowhead=3) # show sharpe ratio text
-    fig.add_annotation(x=minvariance_v,y=minvariance_r,text="Min variance <br>porfolio",arrowhead=3,ax=150) # show min var text
-    fig.add_annotation(x=yours_v,y=yours_r,text='Provided <br> portfolio',arrowhead=3,ax='250') # show your portfolio
+    fig.add_annotation(x=minvariance_v,y=minvariance_r,text="Min variance <br>portfolio",arrowhead=3,ax='400') # show min var text
+    fig.add_annotation(x=yours_v,y=yours_r,text='Provided <br> portfolio',arrowhead=3,ax='250',ay='-100') # show your portfolio
     fig.update_layout(showlegend=False)
-    
-    
     fig.show()
-    
     
 def optimization_interaction():
     """
