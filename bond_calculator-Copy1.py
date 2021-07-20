@@ -13,12 +13,13 @@ import re
 import colorama
 from colorama import Fore, Style
 import yfinance as yf
-from IPython.display import display, HTML
 import plotly.express as px
 import plotly.graph_objects as go
-from yahoofinancials import YahooFinancials
 import yahoo_fin.stock_info as si
 import string
+from termcolor import colored
+import seaborn as sn 
+from datetime import datetime
 
 def maxdrawdown_date(m):
     """
@@ -73,7 +74,23 @@ def sharpe_ratio(r):
     ann_excess_ret = erk.annualize_return(f['excess_r'],12) # annual excess return 
     return ann_excess_ret / ann_vol
 
+def sortino_ratio(r):
+    """
+    The function takes monthly returns to compute sortino ratio 
+    Sortino ratio: (r - rf) / semi deviation aka std when return < 0
+    Presume rf = 0.02
+    """
+    # convert the annual riskfree rate fro per period
+    rf_per_period = (1 + 0.02)**(1/12)-1
+    # calculate excess return
+    excess_return = r - rf_per_period
+    #sortino ratio 
+    return erk.annualize_return(excess_return,12) / erk.annual_vol(r[r<0],12)
+
 def summary_stats(r):
+    """
+    Compute summary statistics based on monthly returns. 
+    """
     skew = r.aggregate(erk.skewness)
     kurt = r.aggregate(erk.kurtosis)
     annual_r = r.aggregate(erk.annualize_return,periods_per_year=12)
@@ -84,6 +101,7 @@ def summary_stats(r):
     sharpe = r.aggregate(sharpe_ratio)
     best_year = r.aggregate(best_worst_year,options='best')
     worst_year = r.aggregate(best_worst_year,options='worst')
+    sortino = r.aggregate(sortino_ratio)
     m = pd.DataFrame({
         "Annualized Return" : annual_r,
         "Annualized Vol" : annual_v,
@@ -94,7 +112,8 @@ def summary_stats(r):
         "Sharpe Ratio": sharpe,
         "Best Year": best_year,
         "Worst year": worst_year,
-        "Max Drawdown" : dd })
+        "Max Drawdown" : dd,
+        "Sortino ratio":sortino})
     f = pd.concat([m,maxdrawdown_date(r)],axis=1) #combine stats with max drawdown date
     # formatting the dataframe
     for x in ['Annualized Return','Annualized Vol','Cornish-Fisher Var 5%',
@@ -188,8 +207,6 @@ def bond_price(maturity,principal,coupon_rate,coupons_per_year,discount_rate):
             
 
     button.on_click(on_button_clicked)  
-
-         
 
 def bond_price_calculator():
     """
@@ -382,7 +399,7 @@ def stockprice_to_monthlyrate_1(x,start_date,end_date):
     rate_m = rate_d.resample('M').apply(erk.compound) #monthly rate of return
     return rate_m
 
-def monthly_heatmap_single(x,start_date,end_date):
+def monthly_heatmap_single(x='AMD',start_date='2015',end_date='2021'):
     """
     Returns heatmap of monthly return for a single stock.
     Reminder. This function only works for a single stock 
@@ -417,8 +434,8 @@ def monthly_heatmap_single(x,start_date,end_date):
     # axis labels
     plt.xlabel('')
     plt.ylabel('')
-    title = x + " monthly return"  + ' from '   + start_date + ' to '  + end_date 
-    plt.title(title,fontsize = f_size +5)
+    title = '\n' + x + " monthly return"  + ' from '   + start_date + ' to '  + end_date + '\n'
+    plt.title(title,fontsize = f_size +5,fontweight="bold")
     plt.show()
 
 def monthly_heatmap_mutiple(stocks='AAPL,NVDA',start_date='2019',end_date='2020'):
@@ -477,7 +494,6 @@ def balance_income_cash(stocks,k,features):
     """
     helper function for stock_price funtion to display balance sheet, income statement and cashflow
     """
-    from termcolor import colored
     if k == 'balance':
         n = [pd.DataFrame((si.get_balance_sheet(i).iloc[:,[0,1]])) for i in stocks] #extract data from yf and store dataframes in a list
         print(colored('\nSELECTED BALANCE SHEET DATA \n',attrs=['bold']))
@@ -621,7 +637,7 @@ def stockprice_visualization():
     c = widgets.interact(stock_price,x=widgets.Text(value='',description='Tickers',placeholder='AAPL,SPY,etc..'),
                          start_date =widgets.Text(value='2019',description='Start Date'),
                          end_date = widgets.Text(value='2021',description='End Date'),
-                         options=widgets.RadioButtons(options=[('Stock Price',1),
+                         options=widgets.RadioButtons(options=[('Historical Stock Price',1),
                                                                ('Summary Statistics',2),
                                                                ('Monthly returns',3),
                                                                ('Quote Price',4),
@@ -742,7 +758,7 @@ def portfolio(x='AAPL',weight='1',initial=1,start_date='2019',end_date='04-2021'
                      spikecolor='#999999',spikesnap='cursor') # change spike color
                     
     fig.update_traces(mode = 'lines',
-                     hovertemplate ='Your Portfolio: %{y:$,.2f}',
+                     hovertemplate ='%{y:$,.2f}',
                      hoverlabel=dict(bgcolor="black",font_color='white')) # format portfolio value and date month/year
     
     fig.update_layout(hovermode='x')
@@ -768,7 +784,7 @@ def portfolio_optimization(x='AAPL,NVDA',your_weights = '.5,.5',riskfree_rate = 
     er = erk.annualize_return(rate_m,12) # portfolio annual return
     cov = rate_m.cov()
     
-    weights = erk.optimal_weights(40,er,cov)
+    weights = erk.optimal_weights(60,er,cov)
     rets = [erk.portfolio_return(w,er) for w in weights] # annual return
     m_vols = [erk.portfolio_vol(w,cov) for w in weights] # monthly std
     vols = [] # annual volitility
@@ -826,15 +842,17 @@ def portfolio_optimization(x='AAPL,NVDA',your_weights = '.5,.5',riskfree_rate = 
     layout = go.Layout(
         title = 'Efficient Frontier of ' + x,
         xaxis = dict(title='Annual Standard Deviation'),
-        yaxis = dict(title = "Expected Return")
-    )
+        yaxis = dict(title = "Expected Return"))
+    
     fig = go.Figure(layout = layout)
    
     # frontier simulation
     fig.add_trace(go.Scatter(x=frontier['Vols'],y=frontier['Returns'],
                              mode='markers',
                              hovertemplate = 'Expected Return: %{y:.2%} <extra></extra> <br> Standard Deviation: %{x:.2%}' )) 
-                            
+    
+    fig.update_xaxes(showgrid=False,tickformat = ',.0%')
+    fig.update_yaxes(showgrid=False,tickformat = ',.0%')
     # individual stocks
     fig.add_trace(go.Scatter(x=k['Annualized Vol'],y=k['Annualized Return'],mode='markers + text', 
                              text=k.index,
@@ -847,7 +865,7 @@ def portfolio_optimization(x='AAPL,NVDA',your_weights = '.5,.5',riskfree_rate = 
     fig.add_annotation(x=sharpe_v,y=sharpe_r,text=" Max Sharpe <br> portfolio",arrowhead=3) # show sharpe ratio text
     fig.add_annotation(x=minvariance_v,y=minvariance_r,text="Min variance <br>portfolio",arrowhead=3,ax='400') # show min var text
     fig.add_annotation(x=yours_v,y=yours_r,text='Provided <br> portfolio',arrowhead=3,ax='250',ay='-100') # show your portfolio
-    fig.update_layout(showlegend=False)
+    fig.update_layout(showlegend=False,width=1400,height=600)
     fig.show()
     
 def optimization_interaction():
@@ -874,6 +892,6 @@ def stock_info_optimization():
         elif o==3:
             return optimization_interaction()
     k = widgets.interact(m,o=widgets.ToggleButtons(options=[('Stock Info',1),
-                                                        ('Portfolio Simulation',2),
-                                                        ('Portfolio Optimization',3)],
-                                                        description=' '))
+                                                            ('Portfolio Simulation',2),
+                                                            ('Portfolio Optimization',3)],
+                                                  description=' '))
