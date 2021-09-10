@@ -124,10 +124,10 @@ def summary_stats(r):
     return f 
 
 def stock_data(x,start_date,end_date):
-    """
-    Downloads stock prices from yahoo finance for the last 15 years.
-    Returns a df
-    """
+    
+    #Downloads stock prices from yahoo finance for the last 15 years.
+    #Returns a df
+
     k = pd.DataFrame(yf.download(tickers=x,period='15y',proxy=None)['Adj Close'])
     
     # logic for mm/dd/yyyy or mm/yyyy

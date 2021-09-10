@@ -7,12 +7,6 @@ import math
 import statsmodels.api as sm
 import yfinance as yf
 
-def yahoo_finance(*a):
-    "return daily stock prices from 2010-01-01 to 2020-12-30 "
-    data = yf.download(tickers=a,start='2010-01-01',end='2020-12-31',interval='1d',proxy= None)['Close']
-    return data
-
-
 def compound(r):
     "return compound return "
     return np.prod(r + 1) - 1 
@@ -183,7 +177,7 @@ def var_historic(r,level=5):
     """
     # check if it is a daframe
     if isinstance(r,pd.DataFrame):
-        return r.aggregate(var_historic,level=level)
+        return r.aggregate(var_historic,level=level) # run aggregate on every column
     
     # series -> return VAR
     elif isinstance(r,pd.Series):
@@ -212,13 +206,13 @@ def var_gaussian(r,level=5,modified = False):
                  (2*z**3 -5*z)*(s**2)/36
             )
     return -(r.mean() + z*r.std(ddof=0))
-
+    
 def cvar_historic(r,level=5):
     """
     Compute the expected shortfall 
     """
     if isinstance(r,pd.Series):
-        is_beyond = r <= -var_historic(r,level=level)
+        is_beyond = r <= -var_historic(r,level=level) # find me all the returns that is less than historic var 
         return - r[is_beyond].mean()
     if isinstance(r,pd.DataFrame):
         return r.aggregate(cvar_historic,level=level)

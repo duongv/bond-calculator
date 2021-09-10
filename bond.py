@@ -212,7 +212,7 @@ def convexity(maturity=6,principal=1000,couponrate=0.08,coupons_per_year=2,disco
     
 def bond_convexity_calculator():
     
-    gcontrols =   widgets.interactive(convexity,
+    gcontrols = widgets.interactive(  convexity,
                                       maturity=widgets.FloatText(min=1,max=40,step=1,value=4,description='Maturity'),
                                       principal=widgets.FloatText(min=100,max=10000,step=100,value=1000,description='Principal'),
                                       couponrate=widgets.FloatText(min=0.01,max=0.2,step=0.1,value=0.03,description='Coupon Rate'),
