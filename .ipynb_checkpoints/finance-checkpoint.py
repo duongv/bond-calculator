@@ -385,78 +385,74 @@ def stock_price(x='AAPL',period='1Y',start_date=None,end_date=None,option=1):
     """
     Extract stock prices and show their summary statistics or heatmap from yahoo finance
     """
-    if x =='':
-        print('Please type in the stock symbols')
-    else:
-        d = stock_data_2(x,period,start_date,end_date)[0]
-        d.rename(columns={'Adj Close': x},inplace=True)
-        rate_d_1 = d.pct_change() #daily rate of return
-        rate_d = rate_d_1.dropna()
-        rate_m = rate_d.resample('M').apply(erk.compound) #monthly rate of return
+    button = widgets.Button(description="Result")
+    output = widgets.Output()
+    display(button, output)
         
-        d.index.name = 'Date'
-        d.reset_index(inplace=True) # use index as column
-        
-        d_1 = pd.melt(d,id_vars='Date',value_vars=x) # rearange from wide data to long data
-        fig = px.line(d_1,x=d_1['Date'],y=d_1["value"],labels={'variable': 'Stocks'},template= 'simple_white')
+    #setting the 'Result' button
+    def on_button_clicked(b):
+        with output:
+            d = stock_data_2(x,period,start_date,end_date)[0]
+            d.rename(columns={'Adj Close': x},inplace=True)
+            rate_d_1 = d.pct_change() #daily rate of return
+            rate_d = rate_d_1.dropna()
+            rate_m = rate_d.resample('M').apply(erk.compound) #monthly rate of return
 
-        fig.update_yaxes(title_text=' ',tickprefix="$",showgrid=False,) # y-axis in dollar sign
+            d.index.name = 'Date'
+            d.reset_index(inplace=True) # use index as column
 
-        fig.update_xaxes(title_text=' ',showgrid=False,
-                         spikemode ='toaxis',spikedash='dot', # enable spike mode
-                         spikecolor='#999999',spikesnap='cursor') # change spike color 
+            d_1 = pd.melt(d,id_vars='Date',value_vars=x) # rearange from wide data to long data
+            fig = px.line(d_1,x=d_1['Date'],y=d_1["value"],labels={'variable': 'Stocks'},template= 'simple_white')
 
-        # modified hovertemplate properties.
-        if d.iloc[1,1] > d.iloc[-1,1]:  # red line if the return is negative 
-            line_c = 'red'
-        else:
-            line_c = 'chartreuse'    #green if the return is positive
-        fig.update_traces(mode="lines", 
-                          hovertemplate='%{y:$,.2f} <extra> </extra>', # show price 
-                          line_color = line_c,
-                          hoverlabel=dict(bgcolor="black",font_color='white'))
+            fig.update_yaxes(title_text=' ',tickprefix="$",showgrid=False,) # y-axis in dollar sign
 
-        # title format
-        if x in df['Company Name'].tolist():
-            full_name = x
-        else:
-            full_name = df.loc[df.Symbol ==x].values[0][1]  # get the company 's name from CSV file 
-        current_stock_price = d.iloc[-1,1] # current stock price
-        current_percent_change = d.iloc[-1,1]/d.iloc[1,1] -1
-        current_price_change = d.iloc[-1,1] - d.iloc[1,1]
-        if current_percent_change < 0:
-            current_percent_change = current_percent_change * -1 # take the minus away
-            title_text = full_name + '<br>' + "{:,.2f} USD".format(current_stock_price) + '</br>' +'{:,.2f}'.format(current_price_change) +'(' + "{:,.2%}".format(current_percent_change)  + ') ↓ since ' + d.Date[1].strftime("%m/%Y")
-        else:
-            title_text = full_name + '<br>' + "{:,.2f} USD".format(current_stock_price) + '</br>' + '+' + '{:,.2f}'.format(current_price_change) +'(' + "{:,.2%}".format(current_percent_change)  + ') ↑ since ' + d.Date[1].strftime("%m/%Y")
+            fig.update_xaxes(title_text=' ',showgrid=False,
+                             spikemode ='toaxis',spikedash='dot', # enable spike mode
+                             spikecolor='#999999',spikesnap='cursor') # change spike color 
 
-        #constructing monthly return graph with interaction 
-        fig.update_layout(hovermode='x', # show the date on axis 
-                          title={'text': title_text , 
-                                'y':.9,
-                                'x':0.1,
-                                'xanchor': 'left',    
-                                'yanchor': 'top'}, 
-                                font=dict(family="Arial",size=9),
-                                barmode='stack',
-                                legend=dict(x=0.4, y=-0.3),
-                                legend_orientation="h")                   
+            # modified hovertemplate properties.
+            if d.iloc[1,1] > d.iloc[-1,1]:  # red line if the return is negative 
+                line_c = 'red'
+            else:
+                line_c = 'chartreuse'    #green if the return is positive
+            fig.update_traces(mode="lines", 
+                              hovertemplate='%{y:$,.2f} <extra> </extra>', # show price 
+                              line_color = line_c,
+                              hoverlabel=dict(bgcolor="black",font_color='white'))
 
-        button = widgets.Button(description="Result")
-        output = widgets.Output()
-        display(button, output)
-        
-        #setting the 'Result' button
-        def on_button_clicked(b):
-            with output:
-                if option ==1:
-                    fig.show() # graph
-                    if period not in ['1D','1W']:  # only show statistics if data is MORE than 1 week
-                        r_summary_stats = summary_stats(rate_m)
-                        display(r_summary_stats) # summary statistics 
-                elif option ==2: #monthly return df
-                    monthly_heatmap_single(rate_m)
-        button.on_click(on_button_clicked)
+            # title format
+            if x in df['Company Name'].tolist():
+                full_name = x
+            else:
+                full_name = df.loc[df.Symbol ==x].values[0][1]  # get the company 's name from CSV file 
+            current_stock_price = d.iloc[-1,1] # current stock price
+            current_percent_change = d.iloc[-1,1]/d.iloc[1,1] -1
+            current_price_change = d.iloc[-1,1] - d.iloc[1,1]
+            if current_percent_change < 0:
+                current_percent_change = current_percent_change * -1 # take the minus away
+                title_text = full_name + '<br>' + "{:,.2f} USD".format(current_stock_price) + '</br>' +'{:,.2f}'.format(current_price_change) +'(' + "{:,.2%}".format(current_percent_change)  + ') ↓ since ' + d.Date[1].strftime("%m/%Y")
+            else:
+                title_text = full_name + '<br>' + "{:,.2f} USD".format(current_stock_price) + '</br>' + '+' + '{:,.2f}'.format(current_price_change) +'(' + "{:,.2%}".format(current_percent_change)  + ') ↑ since ' + d.Date[1].strftime("%m/%Y")
+
+            #constructing monthly return graph with interaction 
+            fig.update_layout(hovermode='x', # show the date on axis 
+                              title={'text': title_text , 
+                                    'y':.9,
+                                    'x':0.1,
+                                    'xanchor': 'left',    
+                                    'yanchor': 'top'}, 
+                                    font=dict(family="Arial",size=9),
+                                    barmode='stack',
+                                    legend=dict(x=0.4, y=-0.3),
+                                    legend_orientation="h") 
+
+            if option ==1:
+                fig.show() # graph
+                if period not in ['1D','1W']:  # only show statistics if data is MORE than 1 week
+                    display(summary_stats(rate_m)) # summary statistics 
+            elif option ==2: #monthly return df
+                monthly_heatmap_single(rate_m)
+    button.on_click(on_button_clicked) 
         
 def stockprice_visualization():
     "display stocks visualization, summary statistics with interaction"
@@ -486,8 +482,10 @@ def weight_return_portfolio(returns,weights):
         raise ValueError('# of stocks and # of weights have to be the same')
     
     # total of weights = 1. it is allowed to have value slightly smaller than 1 in case of odd numbers of stocks
-    if np.sum(weights) <.9 or np.sum(weights) > 1: 
-        raise ValueError('Sum of weights has to be 1')
+    if np.sum(weights) < 0.9 : 
+        raise ValueError('Sum of weights does not add up to 1')
+    if np.sum(weights) > 1.01 :
+        raise ValueError('Sum of weights is greater than 1')
     
     return pd.DataFrame(np.sum(np.multiply(weights,returns),axis=1))
     
@@ -495,81 +493,81 @@ def portfolio(x='AAPL',weight='1',initial=10000,period='1Y',start_date=None,end_
     """
     Implement portfolio visualization and display statistics
     """
-    #convert list of type string weights to type float weights 
-    w = weight.split(',')
-    for i in range(0,len(w)):
-        w[i] = float(w[i])
-    
-    x_benchmark = x + ("," + benchmark if benchmark else "") # combine stocks in portfolio and benchmark stocks
-    # set up the portfolio   
-    if freq == 'Daily':   
-        rate_m = stock_data_2(x_benchmark,period=period,start_date_para=start_date,end_date_para=end_date)[2] # daily return
-    else:
-        rate_m = stock_data_2(x_benchmark,period=period,start_date_para=start_date,end_date_para=end_date)[1]#monthly return 
-    
-    rate_portfolio = weight_return_portfolio(rate_m.iloc[:,:len(x.split(','))],w)
-    rate_portfolio.columns = ['Your Portfolio'] # rename column
-    
-    # if user types in benchmark
-    if benchmark !='':
-        rate_benchmark = rate_m.iloc[:,len(w):]  # cumulative returns 
-        #ticker -> full name 
-        column_list = rate_benchmark.columns.to_list()
-        c = []
-        for i in rate_benchmark.columns.to_list():
-            if i in list(df.Symbol):
-                c.append(df.loc[df.Symbol ==i].values[0][1])  # get the company 's name from CSV file 
-            else:
-                c.append(i)
-        rate_benchmark.columns = c
-        rate_portfolio = rate_portfolio.merge(rate_benchmark,left_index=True,right_index=True) #combine original rate porfolio with rate benchmark 
-        
-    portfolio = initial * (1 + rate_portfolio).cumprod() # (1+r)(1+r1)...
-    portfolio.iloc[0] = initial # set the first row to initial investment so it looks better on graph
-    
-    # summary statistics
-    if freq =='Daily':
-        s = summary_stats(rate_portfolio.resample('M').apply(erk.compound))
-    else:
-        s = summary_stats(rate_portfolio)
-    ending_balance = pd.DataFrame(portfolio.iloc[-1,:]) # ending balance
-    ending_balance.columns = ['Ending Balance'] # change column name to ending balance 
-    s1 = pd.concat([ending_balance,s],axis=1) # combine ending balance with other statistics. 
-    s1.iloc[:,0] = s1.iloc[:,0].astype(float).map(lambda n: '${:,.2f}'.format(n)) # format ending balance 
-    
-    # set up graph with portfolio and benchmark
-    stocknames = portfolio.columns.to_list()
-    portfolio.reset_index(inplace=True) # use index as column
-    portfolio = pd.melt(portfolio,id_vars=['Date'],value_vars=stocknames) # rearange from wide data to long data for the purpose of graphing
-    var = portfolio['variable'] 
-    currency = "${:,.2f}".format(initial) # format currency for graph title
-    
-    fig = px.line(portfolio,x=portfolio['Date'],y=portfolio['value'], color=portfolio['variable'],
-                      title = 'Your investment of ' + currency + date_chosen(period,start_date,end_date),
-                      labels={'variable':' ','index':'Year','value':'Portfolio Balance'})    
-                     
-    fig.update_yaxes(tickprefix="$", # the y-axis is in dollars
-                     showgrid=True) 
-
-    fig.update_xaxes(showgrid=False,
-                     spikemode ='across',spikedash='dot', # enable spike mode
-                     spikecolor='#999999',spikesnap='cursor') # change spike color 
-
-    fig.update_layout(hovermode="x",
-                      hoverdistance=1000,  # Distance to show hover label of data point
-                      spikedistance=1000) # Distance to show spike     
-    fig.update_traces(mode = 'lines',hovertemplate ='<br>%{y:$,.2f} <extra></extra>')
-    
+    #setting the 'Result' button
     button = widgets.Button(description="Result")
     output = widgets.Output()
     display(button, output)
-        
-    #setting the 'Result' button
+    
     def on_button_clicked(b):
         with output:
+            #convert list of type string weights to type float weights 
+            w = weight.split(',')
+            for i in range(0,len(w)):
+                w[i] = float(w[i])
+
+            x_benchmark = x + ("," + benchmark if benchmark else "") # combine stocks in portfolio and benchmark stocks
+            # set up the portfolio   
+            if freq == 'Daily':   
+                rate_m =stock_data_2(x_benchmark,period=period,start_date_para=start_date,end_date_para=end_date)[2] # daily return
+            else:
+                rate_m = stock_data_2(x_benchmark,period=period,start_date_para=start_date,end_date_para=end_date)[1]#monthly return 
+
+            rate_portfolio = weight_return_portfolio(rate_m.iloc[:,:len(x.split(','))],w)   #w1 * r1 + w2 *r2 + .... + wn*rn
+            rate_portfolio.columns = ['Your Portfolio'] # rename column
+
+            # if user types in benchmark
+            if benchmark !='':
+                rate_benchmark = rate_m.iloc[:,len(w):]  # cumulative returns 
+                #ticker -> full name 
+                column_list = rate_benchmark.columns.to_list()
+                c = []
+                for i in rate_benchmark.columns.to_list():
+                    if i in list(df.Symbol):
+                        c.append(df.loc[df.Symbol ==i].values[0][1])  # get the company 's name from CSV file 
+                    else:
+                        c.append(i)
+                rate_benchmark.columns = c
+                rate_portfolio = rate_portfolio.merge(rate_benchmark,left_index=True,right_index=True) #combine original rate porfolio with rate benchmark 
+
+            portfolio = initial * (1 + rate_portfolio).cumprod() # (1+r)(1+r1)...
+            portfolio.iloc[0] = initial # set the first row to initial investment so it looks better on graph
+
+            # summary statistics
+            if freq =='Daily':
+                s = summary_stats(rate_portfolio.resample('M').apply(erk.compound))
+            else:
+                s = summary_stats(rate_portfolio)
+            ending_balance = pd.DataFrame(portfolio.iloc[-1,:]) # ending balance
+            ending_balance.columns = ['Ending Balance'] # change column name to ending balance 
+            s1 = pd.concat([ending_balance,s],axis=1) # combine ending balance with other statistics. 
+            s1.iloc[:,0] = s1.iloc[:,0].astype(float).map(lambda n: '${:,.2f}'.format(n)) # format ending balance 
+
+            # set up graph with portfolio and benchmark
+            stocknames = portfolio.columns.to_list()
+            portfolio.reset_index(inplace=True) # use index as column
+            portfolio = pd.melt(portfolio,id_vars=['Date'],value_vars=stocknames) # rearange from wide data to long data for the purpose of graphing
+            var = portfolio['variable'] 
+            currency = "${:,.2f}".format(initial) # format currency for graph title
+
+            fig = px.line(portfolio,x=portfolio['Date'],y=portfolio['value'], color=portfolio['variable'],
+                              title = 'Your investment of ' + currency + date_chosen(period,start_date,end_date),
+                              labels={'variable':' ','index':'Year','value':'Portfolio Balance'})    
+
+            fig.update_yaxes(tickprefix="$", # the y-axis is in dollars
+                             showgrid=True) 
+
+            fig.update_xaxes(showgrid=False,
+                             spikemode ='across',spikedash='dot', # enable spike mode
+                             spikecolor='#999999',spikesnap='cursor') # change spike color 
+
+            fig.update_layout(hovermode="x",
+                              hoverdistance=1000,  # Distance to show hover label of data point
+                              spikedistance=1000) # Distance to show spike     
+            fig.update_traces(mode = 'lines',hovertemplate ='<br>%{y:$,.2f} <extra></extra>')
+            
             fig.show() # graph
-            display(s1)
-    button.on_click(on_button_clicked)   
+            display(s1) # summary statistics
+    button.on_click(on_button_clicked) 
     
 def show():
     control = widgets.interact(portfolio,x=widgets.Text(value='',description='Ticker(s)',placeholder='AAPL,SPY,etc..'),
@@ -590,92 +588,10 @@ def show():
                      freq=widgets.RadioButtons(options=['Daily','Monthly'],description='Period'))
     display(control)
     
-def portfolio_optimization(x='AAPL,NVDA',your_weights = '.5,.5',riskfree_rate = 0.03,period='5Y',start_date=None,end_date=None):
+def portfolio_optimization(x='AAPL,NVDA',your_weights = '0.6,0.4',riskfree_rate = 0.03,period='5Y',start_date=None,end_date=None):
     """
     Visualizing tangency and global min var portfolio for stocks in SP500
     """
-    # convert list of type string weights to type float weights
-    yours_w = your_weights.split(',')
-    for i in range(0,len(yours_w)):
-        yours_w[i] = float(yours_w[i])
-    
-    rate_m = stock_data_2(x,period,start_date,end_date)[1] # simple monthly return 
-    er = erk.annualize_return(rate_m,12) # portfolio annual return
-    cov = rate_m.cov()
-    
-    weights = erk.optimal_weights(60,er,cov)
-    rets = [erk.portfolio_return(w,er) for w in weights] # annual return
-    m_vols = [erk.portfolio_vol(w,cov) for w in weights] # monthly std
-    vols = [] # annual volitility
-    for i in m_vols:
-        vols.append(i * math.sqrt(12))
-    
-    frontier = pd.DataFrame({'Returns': rets, 'Vols':vols})
-    yours_r = erk.portfolio_return(np.array(yours_w),er) # given portfolio return
-    yours_v = (erk.portfolio_vol(np.array(yours_w),cov))*math.sqrt(12)  #given portfolio volatility
-    yours_m = weight_return_portfolio(rate_m,yours_w)
-    
-    #constructing sharpe ratio
-    sharpe_w = erk.msr(float(riskfree_rate),er,cov) # constructing weights to find the best sharpe ratio
-    sharpe_r = (erk.portfolio_return(sharpe_w,er)) # portfolio return with sharpe ratio
-    sharpe_v = (erk.portfolio_vol(sharpe_w,cov))*math.sqrt(12)  # portfolio vol with sharpe ratio    
-    sharpe_m = weight_return_portfolio(rate_m,sharpe_w) #monthly return of your portfolio with Sharpe weights
-    
-    #constructing global minimum variance 
-    minvariance_w = erk.global_min_var(cov)
-    minvariance_r = erk.portfolio_return(minvariance_w,er)
-    minvariance_v = (erk.portfolio_vol(minvariance_w,cov)) * math.sqrt(12) # annual std
-    minvariance_m= weight_return_portfolio(rate_m,minvariance_w) #monthly return of your portfolio with Sharpe weights
-    
-    # special data points DF
-    special = pd.DataFrame({'Vols':[sharpe_v,minvariance_v,yours_v],
-                           'Rets':[sharpe_r,minvariance_r,yours_r]})    
-    
-    #helper function to display percentage in df. 
-    def percent_format(s):
-        for x in s.columns.to_list():
-            s[x] = s[x].astype(float).map(lambda n: '{:.2%}'.format(n)) 
-        return s 
-    
-    #plot frontier and highlight sharpe ratio in plotly
-    k = erk.summary_stats(rate_m)[['Annualized Return','Annualized Vol']]
-    layout = go.Layout(
-        title = 'Efficient Frontier of ' + x + date_chosen(period,start_date,end_date),
-        xaxis = dict(title='Annual Standard Deviation'),
-        yaxis = dict(title = "Expected Return"))
-    
-    fig = go.Figure(layout = layout)
-   
-    # frontier simulation
-    fig.add_trace(go.Scatter(x=frontier['Vols'],y=frontier['Returns'],
-                             mode='markers',
-                             hovertemplate = 'Expected Return: %{y:.2%} <extra></extra> <br> Standard Deviation: %{x:.2%}' )) 
-    
-    fig.update_xaxes(showgrid=False,tickformat = ',.0%')
-    fig.update_yaxes(showgrid=False,tickformat = ',.0%')
-    # individual stocks
-    fig.add_trace(go.Scatter(x=k['Annualized Vol'],y=k['Annualized Return'],mode='markers + text', 
-                             text=k.index,
-                             textposition="bottom center",
-                             hovertemplate = 'Expected Return: %{y:.2%} <extra></extra> <br> Standard Deviation: %{x:.2%}'))
-    fig.add_trace(go.Scatter(x=special['Vols'],y=special['Rets'],mode='markers',
-                             hovertemplate = 'Expected Return: %{y:.2%} <extra></extra> <br> Standard Deviation: %{x:.2%}'))
-                            
-    
-    fig.add_annotation(x=sharpe_v,y=sharpe_r,text=" Max Sharpe",arrowhead=3) # show sharpe ratio text
-    fig.add_annotation(x=minvariance_v,y=minvariance_r,text="Min var",arrowhead=3,ax='100') # show min var text
-    fig.add_annotation(x=yours_v,y=yours_r,text='Provided <br> portfolio',arrowhead=3,ax='300',ay='-180') # show your portfolio
-    fig.update_layout(showlegend=False,width=1300,height=600)
-    
-    #summary statistics. 
-    con = pd.concat([minvariance_m,sharpe_m,yours_m,rate_m],axis=1)
-    con.columns = ['Min Variance Portfolio','Sharpe Portfolio','Your Portfolio'] + x.split(',')
-    
-    # weight
-    weights = pd.DataFrame({'Stocks': x.split(','),'Sharpe Weights':sharpe_w, 'Min Variance Weights':minvariance_w}).round(3)
-    weights = weights.set_index(weights.columns[0]) # set first column as index
-    weights = percent_format(weights)
-    
     button = widgets.Button(description="Result")
     output = widgets.Output()
     display(button, output)
@@ -683,9 +599,104 @@ def portfolio_optimization(x='AAPL,NVDA',your_weights = '.5,.5',riskfree_rate = 
     #setting the 'Result' button
     def on_button_clicked(b):
         with output:
+            # convert list of type string weights to type float weights
+            yours_w = your_weights.split(',')
+            for i in range(0,len(yours_w)):
+                yours_w[i] = float(yours_w[i])
+
+            rate_m = stock_data_2(x,period,start_date,end_date)[1] # simple monthly return 
+            er = erk.annualize_return(rate_m,12) # portfolio annual return
+            cov = rate_m.cov()
+
+            weights = erk.optimal_weights(60,er,cov)
+            rets = [erk.portfolio_return(w,er) for w in weights] # annual return
+            m_vols = [erk.portfolio_vol(w,cov) for w in weights] # monthly std
+            vols = [] # annual volitility
+            for i in m_vols:
+                vols.append(i * math.sqrt(12))
+
+            frontier = pd.DataFrame({'Returns': rets, 'Vols':vols})
+            yours_r = erk.portfolio_return(np.array(yours_w),er) # given portfolio return
+            yours_v = (erk.portfolio_vol(np.array(yours_w),cov))*math.sqrt(12)  #given portfolio volatility
+            yours_m = weight_return_portfolio(rate_m,yours_w)
+
+            #constructing sharpe ratio
+            sharpe_w = erk.msr(float(riskfree_rate),er,cov) # constructing weights to find the best sharpe ratio
+            sharpe_r = (erk.portfolio_return(sharpe_w,er)) # portfolio return with sharpe ratio
+            sharpe_v = (erk.portfolio_vol(sharpe_w,cov))*math.sqrt(12)  # portfolio vol with sharpe ratio    
+            sharpe_m = weight_return_portfolio(rate_m,sharpe_w) #monthly return of your portfolio with Sharpe weights
+
+            #constructing global minimum variance 
+            minvariance_w = erk.global_min_var(cov)
+            minvariance_r = erk.portfolio_return(minvariance_w,er)
+            minvariance_v = (erk.portfolio_vol(minvariance_w,cov)) * math.sqrt(12) # annual std
+            minvariance_m= weight_return_portfolio(rate_m,minvariance_w) #monthly return of your portfolio with Sharpe weights
+
+            # special data points DF
+            special = pd.DataFrame({'Vols':[yours_v,sharpe_v,minvariance_v],
+                                           'Rets':[yours_r,sharpe_r,minvariance_r],
+                                          'Weights':[yours_w,sharpe_w,minvariance_w]})
+
+            #plot frontier and highlight sharpe ratio in plotly
+            k = erk.summary_stats(rate_m)[['Annualized Return','Annualized Vol']]
+            layout = go.Layout(
+                title = 'Efficient Frontier of ' + x + date_chosen(period,start_date,end_date),
+                xaxis = dict(title='Annual Standard Deviation'),
+                yaxis = dict(title = "Expected Return"))
+
+            fig = go.Figure(layout = layout)
+            # frontier simulation
+            fig.add_trace(go.Scatter(x=frontier['Vols'],y=frontier['Returns'],
+                                     mode='markers',
+                                     hovertemplate = 'Expected Return: %{y:.2%} <extra></extra> <br> Standard Deviation: %{x:.2%}' )) 
+
+            fig.update_xaxes(showgrid=False,tickformat = ',.0%')
+            fig.update_yaxes(showgrid=False,tickformat = ',.0%')
+            # individual stocks
+            fig.add_trace(go.Scatter(x=k['Annualized Vol'],y=k['Annualized Return'],mode='markers + text', 
+                                     text=k.index,
+                                     textposition="bottom center",
+                                     hovertemplate = 'Expected Return: %{y:.2%} <extra></extra> <br> Standard Deviation: %{x:.2%}'))
+
+            n_stocks = len(x.split(','))
+            text = ['<b>Your Portfolio</b><br>','<b>Sharpe Portfolo</b><br>','<b>Min Variance Porfolio</b><br>']
+            text_0 = ['<br>Weight:<br>']*3
+            stocks = x.split(',')*3
+            colon = [': '] * len(stocks)
+            weights =  [str(round(x*100,2))+"%" for x in yours_w + sharpe_w.tolist() + minvariance_w.tolist()]
+            return_words = ['Exptected Return: ']*3
+            vols_words = ['Standard Deviation: '] *3
+            returns =  [str(round(x*100,2))+"%" for x in special['Rets'].tolist()]
+            vols = [str(round(x*100,2))+"%" for x in special['Vols'].tolist()]
+            space = ['<br>'] * len(stocks)
+            first_space = ['<br>']*3
+
+            def big_zip(text,text_0,stocks,colon,weights,returns,vols,return_words,vols_words,first_space):
+                a = zip(stocks,colon,weights,space)
+                b = []
+                new_list = []
+                final = []
+                for i in a:
+                    b.append(i[0]+i[1] +i[2] + i[3])
+                for i in range(0,len(b),n_stocks):
+                    new_list.append(''.join(b[i:i+n_stocks]))
+                for i in range(0,len(text)):
+                    final.append(text[i]+ return_words[i] + returns[i] + first_space[i] + vols_words[i]  + vols[i] + text_0[i] + new_list[i])
+                return final
+
+            final = big_zip(text,text_0,stocks,colon,weights,returns,vols,return_words,vols_words,first_space)
+
+
+            fig.add_trace(go.Scatter(x=special['Vols'],y=special['Rets'],mode='markers',textposition='bottom center',hovertemplate  ='%{text}<extra></extra>',text = final))
+            fig.update_layout(showlegend=False,width=1100,height=600)
+
+            #summary statistics. 
+            con = pd.concat([minvariance_m,sharpe_m,yours_m,rate_m],axis=1)
+            con.columns = ['Min Variance Portfolio','Sharpe Portfolio','Your Portfolio'] + x.split(',')
+
             fig.show() # graph
             display(summary_stats(con))
-            display(weights)
+            
     button.on_click(on_button_clicked)
     
 def optimization_interaction():
