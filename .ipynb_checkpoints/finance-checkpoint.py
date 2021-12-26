@@ -608,14 +608,14 @@ def portfolio_optimization(x='AAPL,NVDA',your_weights = '0.6,0.4',riskfree_rate 
             er = erk.annualize_return(rate_m,12) # portfolio annual return
             cov = rate_m.cov()
 
-            weights = erk.optimal_weights(60,er,cov)
-            rets = [erk.portfolio_return(w,er) for w in weights] # annual return
-            m_vols = [erk.portfolio_vol(w,cov) for w in weights] # monthly std
-            vols = [] # annual volitility
+            weights_frontier = erk.optimal_weights(60,er,cov)
+            rets_f = [erk.portfolio_return(w,er) for w in weights_frontier] # annual return
+            m_vols = [erk.portfolio_vol(w,cov) for w in weights_frontier] # monthly std
+            vols_f = [] # annual volitility
             for i in m_vols:
-                vols.append(i * math.sqrt(12))
+                vols_f.append(i * math.sqrt(12))
 
-            frontier = pd.DataFrame({'Returns': rets, 'Vols':vols})
+            frontier = pd.DataFrame({'Returns': rets_f, 'Vols':vols_f})
             yours_r = erk.portfolio_return(np.array(yours_w),er) # given portfolio return
             yours_v = (erk.portfolio_vol(np.array(yours_w),cov))*math.sqrt(12)  #given portfolio volatility
             yours_m = weight_return_portfolio(rate_m,yours_w)
@@ -636,7 +636,49 @@ def portfolio_optimization(x='AAPL,NVDA',your_weights = '0.6,0.4',riskfree_rate 
             special = pd.DataFrame({'Vols':[yours_v,sharpe_v,minvariance_v],
                                            'Rets':[yours_r,sharpe_r,minvariance_r],
                                           'Weights':[yours_w,sharpe_w,minvariance_w]})
-
+            # set up hovertemplate details
+            n_stocks = len(x.split(',')) #number of stocks 
+            title = ['<b>Your Portfolio</b><br>','<b>Sharpe Portfolio</b><br>','<b>Min Variance Porfolio</b><br>'] # title for special portfolios
+            weight_words = ['<br>Weight:<br>'] # list of the word 'weight'
+            stocks = x.split(',') # list of stock tickers 
+            colon = [': '] # list of colon
+            weights =  [str(round(x*100,2))+"%" for x in yours_w + sharpe_w.tolist() + minvariance_w.tolist()] # list of individual security weight for special p
+            return_words = ['Exptected Return: '] # list of the term 'expected returns'
+            vols_words = ['Standard Deviation: '] # list of the term 'Standard Deviation'
+            returns =  [str(round(x*100,2))+"%" for x in special['Rets'].tolist()] # list of frontier returns
+            vols = [str(round(x*100,2))+"%" for x in special['Vols'].tolist()] # list of frontier std
+            space = ['<br>'] # list of <br>
+            first_space = ['<br>']
+            w_frontier =  [str(round(x*100,2))+"%" for x in np.concatenate(weights_frontier).tolist()] # list of individual security weight for efficient frontier 
+            frontier_returns = [str(round(x*100,2))+"%" for x in rets_f] # list of frontier returns
+            frontier_vols = [str(round(x*100,2))+"%" for x in vols_f] # list of frontier std. 
+            
+            def big_zip(title,weight_words,stocks,colon,weights,returns,vols,return_words,vols_words,first_space):
+                """
+                helper function to set up hovertemplate details for plotly efficient frontier graph. 
+                """
+                colons = colon * len(stocks) # multiply list of colon by the number of points in efficient frontier
+                spaces = space * len(stocks) # multiply list of space by the number of points in efficient frontier
+                a = zip(stocks,colons,weights,spaces) #zip stocks, colons weights and spaces 
+                b = []
+                new_list = []
+                final = []
+                final_1 =[]
+                for i in a:
+                    b.append(i[0]+i[1] +i[2] + i[3]) #combine stocks, colons, weights and spaces in a list 
+                for i in range(0,len(b),n_stocks):
+                    new_list.append(''.join(b[i:i+n_stocks])) #concatenate strings from the list above into big strings and store them in a list. Each string represents one point on efficent frontier graph. 
+                for i in range(0,len(title)): # hovertemplate details for each special portfolio
+                    final.append(title[i]+ return_words[i] + returns[i] + first_space[i] + vols_words[i]  + vols[i] + weight_words[i] + new_list[i]) 
+                for i in range(0,len(return_words)): #hovertemplate details for each frontier portfolio
+                    final_1.append(return_words[i] + returns[i] + first_space[i] + vols_words[i]  + vols[i] + weight_words[i] + new_list[i])
+                return final,final_1
+            
+            # 3 special portfolios 
+            special_hover = big_zip(title,weight_words*3,stocks*3,colon,weights,returns,vols,return_words*3,vols_words*3,first_space*3)[0]
+            # 60 generated frontier portfolio 
+            frontier_hover = big_zip(title,weight_words*60,stocks*60,colon,w_frontier,frontier_returns,frontier_vols,return_words*60,vols_words*60,first_space*60)[1]
+            
             #plot frontier and highlight sharpe ratio in plotly
             k = erk.summary_stats(rate_m)[['Annualized Return','Annualized Vol']]
             layout = go.Layout(
@@ -648,7 +690,7 @@ def portfolio_optimization(x='AAPL,NVDA',your_weights = '0.6,0.4',riskfree_rate 
             # frontier simulation
             fig.add_trace(go.Scatter(x=frontier['Vols'],y=frontier['Returns'],
                                      mode='markers',
-                                     hovertemplate = 'Expected Return: %{y:.2%} <extra></extra> <br> Standard Deviation: %{x:.2%}' )) 
+                                     hovertemplate  ='%{text}<extra></extra>',text = frontier_hover)) 
 
             fig.update_xaxes(showgrid=False,tickformat = ',.0%')
             fig.update_yaxes(showgrid=False,tickformat = ',.0%')
@@ -657,39 +699,14 @@ def portfolio_optimization(x='AAPL,NVDA',your_weights = '0.6,0.4',riskfree_rate 
                                      text=k.index,
                                      textposition="bottom center",
                                      hovertemplate = 'Expected Return: %{y:.2%} <extra></extra> <br> Standard Deviation: %{x:.2%}'))
-
-            n_stocks = len(x.split(','))
-            text = ['<b>Your Portfolio</b><br>','<b>Sharpe Portfolo</b><br>','<b>Min Variance Porfolio</b><br>']
-            text_0 = ['<br>Weight:<br>']*3
-            stocks = x.split(',')*3
-            colon = [': '] * len(stocks)
-            weights =  [str(round(x*100,2))+"%" for x in yours_w + sharpe_w.tolist() + minvariance_w.tolist()]
-            return_words = ['Exptected Return: ']*3
-            vols_words = ['Standard Deviation: '] *3
-            returns =  [str(round(x*100,2))+"%" for x in special['Rets'].tolist()]
-            vols = [str(round(x*100,2))+"%" for x in special['Vols'].tolist()]
-            space = ['<br>'] * len(stocks)
-            first_space = ['<br>']*3
-
-            def big_zip(text,text_0,stocks,colon,weights,returns,vols,return_words,vols_words,first_space):
-                a = zip(stocks,colon,weights,space)
-                b = []
-                new_list = []
-                final = []
-                for i in a:
-                    b.append(i[0]+i[1] +i[2] + i[3])
-                for i in range(0,len(b),n_stocks):
-                    new_list.append(''.join(b[i:i+n_stocks]))
-                for i in range(0,len(text)):
-                    final.append(text[i]+ return_words[i] + returns[i] + first_space[i] + vols_words[i]  + vols[i] + text_0[i] + new_list[i])
-                return final
-
-            final = big_zip(text,text_0,stocks,colon,weights,returns,vols,return_words,vols_words,first_space)
-
-
-            fig.add_trace(go.Scatter(x=special['Vols'],y=special['Rets'],mode='markers',textposition='bottom center',hovertemplate  ='%{text}<extra></extra>',text = final))
-            fig.update_layout(showlegend=False,width=1100,height=600)
-
+            #special portfolios - Your portfolio, sharpe and min variance . 
+            fig.add_trace(go.Scatter(x=special['Vols'],y=special['Rets'],mode='markers',textposition='bottom center',hovertemplate  ='%{text}<extra></extra>',text = special_hover))
+            fig.update_layout(showlegend=False,width=1200,height=600)
+            
+            fig.add_annotation(x=sharpe_v,y=sharpe_r,text=" Max Sharpe",arrowhead=3) # show sharpe ratio arrow
+            fig.add_annotation(x=minvariance_v,y=minvariance_r,text="Min<br>Variance",arrowhead=3,ax='-100',ay='40') # show min var arrow
+            fig.add_annotation(x=yours_v,y=yours_r,text='Provided <br> portfolio',arrowhead=3,ax='80',ay='50') # show your portfolio arrow
+            
             #summary statistics. 
             con = pd.concat([minvariance_m,sharpe_m,yours_m,rate_m],axis=1)
             con.columns = ['Min Variance Portfolio','Sharpe Portfolio','Your Portfolio'] + x.split(',')
@@ -717,7 +734,7 @@ def optimization_interaction():
                                                         ('Manually choose the period','Manually')],description='Period',diabled=False,value='1Y'),
                            riskfree_rate = widgets.Text(value='0.03',description='InterestRate'),
                            start_date =widgets.DatePicker(description='Start Date'),
-                           end_date = widgets.DatePicker(description='Start Date'))
+                           end_date = widgets.DatePicker(description='End Date'))
     display(control) 
     
 def stock_info_optimization():
