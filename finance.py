@@ -381,7 +381,7 @@ def interactive_balance_income_cash():
     
     display(c)
     
-def stock_price(x='AAPL',period='1Y',start_date=None,end_date=None,option=1):
+def stock_price(stock='AAPL',period='1Y',start_date=None,end_date=None,option=1):
     """
     Extract stock prices and show their summary statistics or heatmap from yahoo finance
     """
@@ -392,7 +392,8 @@ def stock_price(x='AAPL',period='1Y',start_date=None,end_date=None,option=1):
     #setting the 'Result' button
     def on_button_clicked(b):
         with output:
-            d = stock_data_2(x,period,start_date,end_date)[0]
+            x = df.loc[df.Symbol_CompanyName == stock].values[0][0] #convert full name to stock ticker 
+            d = stock_data_2(x,period,start_date,end_date)[0] # fetch data from yf
             d.rename(columns={'Adj Close': x},inplace=True)
             rate_d_1 = d.pct_change() #daily rate of return
             rate_d = rate_d_1.dropna()
@@ -420,19 +421,15 @@ def stock_price(x='AAPL',period='1Y',start_date=None,end_date=None,option=1):
                               line_color = line_c,
                               hoverlabel=dict(bgcolor="black",font_color='white'))
 
-            # title format
-            if x in df['Company Name'].tolist():
-                full_name = x
-            else:
-                full_name = df.loc[df.Symbol ==x].values[0][1]  # get the company 's name from CSV file 
+            
             current_stock_price = d.iloc[-1,1] # current stock price
             current_percent_change = d.iloc[-1,1]/d.iloc[1,1] -1
             current_price_change = d.iloc[-1,1] - d.iloc[1,1]
             if current_percent_change < 0:
                 current_percent_change = current_percent_change * -1 # take the minus away
-                title_text = full_name + '<br>' + "{:,.2f} USD".format(current_stock_price) + '</br>' +'{:,.2f}'.format(current_price_change) +'(' + "{:,.2%}".format(current_percent_change)  + ') ↓ since ' + d.Date[1].strftime("%m/%Y")
+                title_text = stock + '<br>' + "{:,.2f} USD".format(current_stock_price) + '</br>' +'{:,.2f}'.format(current_price_change) +'(' + "{:,.2%}".format(current_percent_change)  + ') ↓ since ' + d.Date[1].strftime("%m/%Y")
             else:
-                title_text = full_name + '<br>' + "{:,.2f} USD".format(current_stock_price) + '</br>' + '+' + '{:,.2f}'.format(current_price_change) +'(' + "{:,.2%}".format(current_percent_change)  + ') ↑ since ' + d.Date[1].strftime("%m/%Y")
+                title_text = stock + '<br>' + "{:,.2f} USD".format(current_stock_price) + '</br>' + '+' + '{:,.2f}'.format(current_price_change) +'(' + "{:,.2%}".format(current_percent_change)  + ') ↑ since ' + d.Date[1].strftime("%m/%Y")
 
             #constructing monthly return graph with interaction 
             fig.update_layout(hovermode='x', # show the date on axis 
@@ -456,7 +453,7 @@ def stock_price(x='AAPL',period='1Y',start_date=None,end_date=None,option=1):
         
 def stockprice_visualization():
     "display stocks visualization, summary statistics with interaction"
-    c = widgets.interact(stock_price,x=widgets.Combobox(description='Company',placeholder='AAPL',options=df.Symbol.tolist() + df['Company Name'].tolist()),
+    c = widgets.interact(stock_price,stock=widgets.Combobox(description='Company',placeholder='AAPL',options=df.Symbol_CompanyName.tolist()),
                     period = widgets.Dropdown(options=[('1 day','1D'),
                                                         ('1 week','1W'),
                                                         ('1 month','1M'),
@@ -573,7 +570,7 @@ def show():
     control = widgets.interact(portfolio,x=widgets.Text(value='',description='Ticker(s)',placeholder='AAPL,SPY,etc..'),
                      weight =widgets.Text(value='',description='Weight(s)',placeholder='0.1,0.2,0.3,etc...'),
                      benchmark = widgets.Text(value='',description='Benchmark'),
-                     initial = widgets.FloatText(value=10000,description='Intitial'),
+                     initial = widgets.FloatText(value=10000,description='Intitial(USD)'),
                      period = widgets.Dropdown(options=[('1 day','1D'),
                                                         ('1 week','1W'),
                                                         ('1 month','1M'),
@@ -608,7 +605,7 @@ def portfolio_optimization(x='AAPL,NVDA',your_weights = '0.6,0.4',riskfree_rate 
             er = erk.annualize_return(rate_m,12) # portfolio annual return
             cov = rate_m.cov()
 
-            weights_frontier = erk.optimal_weights(60,er,cov)
+            weights_frontier = erk.optimal_weights(120,er,cov)
             rets_f = [erk.portfolio_return(w,er) for w in weights_frontier] # annual return
             m_vols = [erk.portfolio_vol(w,cov) for w in weights_frontier] # monthly std
             vols_f = [] # annual volitility
@@ -657,10 +654,10 @@ def portfolio_optimization(x='AAPL,NVDA',your_weights = '0.6,0.4',riskfree_rate 
                 """
                 helper function to set up hovertemplate details for plotly efficient frontier graph. 
                 """
-                colons = colon * len(stocks) # multiply list of colon by the number of points in efficient frontier
-                spaces = space * len(stocks) # multiply list of space by the number of points in efficient frontier
+                colons = colon * len(stocks) # multiply list of colon by the number of points on efficient frontier
+                spaces = space * len(stocks) # multiply list of space by the number of points on  efficient frontier
                 a = zip(stocks,colons,weights,spaces) #zip stocks, colons weights and spaces 
-                b = []
+                b = [] 
                 new_list = []
                 final = []
                 final_1 =[]
@@ -674,10 +671,10 @@ def portfolio_optimization(x='AAPL,NVDA',your_weights = '0.6,0.4',riskfree_rate 
                     final_1.append(return_words[i] + returns[i] + first_space[i] + vols_words[i]  + vols[i] + weight_words[i] + new_list[i])
                 return final,final_1
             
-            # 3 special portfolios 
+            # 3 special portfolios - provided, min variance and sharpe por
             special_hover = big_zip(title,weight_words*3,stocks*3,colon,weights,returns,vols,return_words*3,vols_words*3,first_space*3)[0]
             # 60 generated frontier portfolio 
-            frontier_hover = big_zip(title,weight_words*60,stocks*60,colon,w_frontier,frontier_returns,frontier_vols,return_words*60,vols_words*60,first_space*60)[1]
+            frontier_hover = big_zip(title,weight_words*120,stocks*120,colon,w_frontier,frontier_returns,frontier_vols,return_words*120,vols_words*120,first_space*120)[1]
             
             #plot frontier and highlight sharpe ratio in plotly
             k = erk.summary_stats(rate_m)[['Annualized Return','Annualized Vol']]
@@ -703,9 +700,9 @@ def portfolio_optimization(x='AAPL,NVDA',your_weights = '0.6,0.4',riskfree_rate 
             fig.add_trace(go.Scatter(x=special['Vols'],y=special['Rets'],mode='markers',textposition='bottom center',hovertemplate  ='%{text}<extra></extra>',text = special_hover))
             fig.update_layout(showlegend=False,width=1200,height=600)
             
-            fig.add_annotation(x=sharpe_v,y=sharpe_r,text=" Max Sharpe",arrowhead=3) # show sharpe ratio arrow
-            fig.add_annotation(x=minvariance_v,y=minvariance_r,text="Min<br>Variance",arrowhead=3,ax='-100',ay='40') # show min var arrow
-            fig.add_annotation(x=yours_v,y=yours_r,text='Provided <br> portfolio',arrowhead=3,ax='80',ay='50') # show your portfolio arrow
+            fig.add_annotation(x=sharpe_v,y=sharpe_r,text="<b>Max Sharpe</b>",arrowhead=3) # show sharpe ratio arrow
+            fig.add_annotation(x=minvariance_v,y=minvariance_r,text="<b>Min<br>Variance</b>",arrowhead=3,ax='-100',ay='40') # show min var arrow
+            fig.add_annotation(x=yours_v,y=yours_r,text='<b>Provided <br> portfolio</b>',arrowhead=3,ax='80',ay='50') # show your portfolio arrow
             
             #summary statistics. 
             con = pd.concat([minvariance_m,sharpe_m,yours_m,rate_m],axis=1)
