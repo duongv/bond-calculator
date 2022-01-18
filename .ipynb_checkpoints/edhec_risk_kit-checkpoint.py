@@ -394,7 +394,7 @@ def global_min_var(cov):
     
 def msr(riskfree_rate, er,cov):
     """
-    riskFree rate + er + cov -> W aka maximise the negative of sharpe ratio
+    riskFree rate + er + cov -> W aka maximise the ne negative of sharpe ratio
     """
     n= er.shape[0]
     # creating weight equally.

@@ -19,7 +19,6 @@ import yahoo_fin.stock_info as si
 import string
 from termcolor import colored
 import seaborn as sn 
-#from datetime import datetime
 import sys
 from datetime import date
 from datetime import timedelta
@@ -402,7 +401,7 @@ def stock_price(stock='AAPL',period='1Y',start_date=None,end_date=None,option=1)
             d.index.name = 'Date'
             d.reset_index(inplace=True) # use index as column
 
-            d_1 = pd.melt(d,id_vars='Date',value_vars=x) # rearange from wide data to long data
+            d_1 = pd.melt(d[1:],id_vars='Date',value_vars=x) # rearange from wide data to long data
             fig = px.line(d_1,x=d_1['Date'],y=d_1["value"],labels={'variable': 'Stocks'},template= 'simple_white')
 
             fig.update_yaxes(title_text=' ',tickprefix="$",showgrid=False,) # y-axis in dollar sign
@@ -420,16 +419,21 @@ def stock_price(stock='AAPL',period='1Y',start_date=None,end_date=None,option=1)
                               hovertemplate='%{y:$,.2f} <extra> </extra>', # show price 
                               line_color = line_c,
                               hoverlabel=dict(bgcolor="black",font_color='white'))
-
-            
+           
+            if period == 'Manually':
+                date_range_title = ' (' + d.Date[1].strftime("%m/%Y") + '-' + d['Date'].iloc[-1].strftime("%m/%Y") + ')'
+            else:
+                date_range_title = ' since ' + d.Date[1].strftime("%m/%Y")
+                    
             current_stock_price = d.iloc[-1,1] # current stock price
             current_percent_change = d.iloc[-1,1]/d.iloc[1,1] -1
             current_price_change = d.iloc[-1,1] - d.iloc[1,1]
-            if current_percent_change < 0:
+            
+            if current_price_change < 0:
                 current_percent_change = current_percent_change * -1 # take the minus away
-                title_text = stock + '<br>' + "{:,.2f} USD".format(current_stock_price) + '</br>' +'{:,.2f}'.format(current_price_change) +'(' + "{:,.2%}".format(current_percent_change)  + ') ↓ since ' + d.Date[1].strftime("%m/%Y")
+                title_text = stock + '<br>' + "{:,.2f} USD".format(current_stock_price) + '</br>' +'{:,.2f}'.format(current_price_change)+'(' + "{:,.2%}".format(current_percent_change)  + ') ↓' + date_range_title
             else:
-                title_text = stock + '<br>' + "{:,.2f} USD".format(current_stock_price) + '</br>' + '+' + '{:,.2f}'.format(current_price_change) +'(' + "{:,.2%}".format(current_percent_change)  + ') ↑ since ' + d.Date[1].strftime("%m/%Y")
+                title_text= stock + '<br>' + "{:,.2f} USD".format(current_stock_price) + '</br>' + '+' +'{:,.2f}'.format(current_price_change)+'(' + "{:,.2%}".format(current_percent_change)  + ') ↑' + date_range_title
 
             #constructing monthly return graph with interaction 
             fig.update_layout(hovermode='x', # show the date on axis 
@@ -445,7 +449,7 @@ def stock_price(stock='AAPL',period='1Y',start_date=None,end_date=None,option=1)
 
             if option ==1:
                 fig.show() # graph
-                if period not in ['1D','1W']:  # only show statistics if data is MORE than 1 week
+                if d.shape[0] > 250: # only show statistics if data is MORE than 1 year - 250 days trading in 1 year 
                     display(summary_stats(rate_m)) # summary statistics 
             elif option ==2: #monthly return df
                 monthly_heatmap_single(rate_m)
@@ -511,7 +515,7 @@ def portfolio(x='AAPL',weight='1',initial=10000,period='1Y',start_date=None,end_
 
             rate_portfolio = weight_return_portfolio(rate_m.iloc[:,:len(x.split(','))],w)   #w1 * r1 + w2 *r2 + .... + wn*rn
             rate_portfolio.columns = ['Your Portfolio'] # rename column
-
+            
             # if user types in benchmark
             if benchmark !='':
                 rate_benchmark = rate_m.iloc[:,len(w):]  # cumulative returns 
@@ -528,17 +532,9 @@ def portfolio(x='AAPL',weight='1',initial=10000,period='1Y',start_date=None,end_
 
             portfolio = initial * (1 + rate_portfolio).cumprod() # (1+r)(1+r1)...
             portfolio.iloc[0] = initial # set the first row to initial investment so it looks better on graph
-
-            # summary statistics
-            if freq =='Daily':
-                s = summary_stats(rate_portfolio.resample('M').apply(erk.compound))
-            else:
-                s = summary_stats(rate_portfolio)
             ending_balance = pd.DataFrame(portfolio.iloc[-1,:]) # ending balance
-            ending_balance.columns = ['Ending Balance'] # change column name to ending balance 
-            s1 = pd.concat([ending_balance,s],axis=1) # combine ending balance with other statistics. 
-            s1.iloc[:,0] = s1.iloc[:,0].astype(float).map(lambda n: '${:,.2f}'.format(n)) # format ending balance 
-
+            ending_balance.columns = ['Ending Balance'] 
+            
             # set up graph with portfolio and benchmark
             stocknames = portfolio.columns.to_list()
             portfolio.reset_index(inplace=True) # use index as column
@@ -562,8 +558,18 @@ def portfolio(x='AAPL',weight='1',initial=10000,period='1Y',start_date=None,end_
                               spikedistance=1000) # Distance to show spike     
             fig.update_traces(mode = 'lines',hovertemplate ='<br>%{y:$,.2f} <extra></extra>')
             
-            fig.show() # graph
-            display(s1) # summary statistics
+            fig.show() # displaying graph
+            
+            # summary statistics
+            if rate_m.shape[0] > 250: # only show statistics if data is MORE than 1 year - 250 days of trading 
+                if freq =='Daily':
+                    s = summary_stats(rate_portfolio.resample('M').apply(erk.compound))
+                else:
+                    s = summary_stats(rate_portfolio)
+                s1 = pd.concat([ending_balance,s],axis=1) # combine ending balance with other statistics. 
+                s1.iloc[:,0] = s1.iloc[:,0].astype(float).map(lambda n: '${:,.2f}'.format(n)) # format ending balance 
+                display(s1) # display summary statistics
+                
     button.on_click(on_button_clicked) 
     
 def show():
