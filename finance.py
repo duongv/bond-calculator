@@ -1,13 +1,9 @@
 import pandas as pd
 import edhec_risk_kit as erk
 import numpy as np
-from scipy.optimize import minimize
 import matplotlib.pyplot as plt
-import collections
 import math
 import ipywidgets as widgets
-import statsmodels.api as sm
-import numpy_financial as npf
 from IPython.display import display
 import re
 import colorama
@@ -23,6 +19,7 @@ import sys
 from datetime import date
 from datetime import timedelta
 import datetime
+
 
 df = pd.read_csv('stocks.csv') # list of stock tickers
 
@@ -137,22 +134,22 @@ def date_chosen(period='1Y',start_date_para=None,end_date_para=None):
     from datetime import datetime as dt
     end_date = date.today()
     if period == '1D':
-        start_date = end_date - datetime.timedelta(days=1)
+        start_date = end_date - timedelta(days=1)
     elif period == '1W':
-        start_date = end_date - datetime.timedelta(days=7)
+        start_date = end_date - timedelta(days=7)
     elif period == '1M':
-        start_date = end_date - datetime.timedelta(days=30)
+        start_date = end_date - timedelta(days=30)
     elif period == 'YTD':
         start_date = end_date.strftime('%Y') + '-01-02'
         start_date = dt.strptime(start_date, '%Y-%m-%d')
     elif period == '6M':
-        start_date = end_date - datetime.timedelta(days=180)
+        start_date = end_date - timedelta(days=180)
     elif period == '1Y':
-        start_date = end_date - datetime.timedelta(days=365)
+        start_date = end_date - timedelta(days=365)
     elif period == '5Y':
-        start_date = end_date - datetime.timedelta(days=365*5)
+        start_date = end_date - timedelta(days=365*5)
     elif period == 'Max':
-        start_date = end_date - datetime.timedelta(days=365*15)
+        start_date = end_date - timedelta(days=365*15)
     elif period == 'Manually':
         if start_date_para is None or end_date_para is None:
             raise ValueError('Please choose the period from Start Date and End Date boxes')
@@ -180,22 +177,22 @@ def stock_data_2(x='AAPL',period='1Y',start_date_para=None,end_date_para=None):
     end_date = datetime.date.today()
     # if today is not in dataset,for example, weekend or holiday, use the 1st business date prior to today
     while not pd.Timestamp(end_date.strftime("%Y-%m-%d")) in k.index: 
-        end_date = end_date - datetime.timedelta(days=1)
+        end_date = end_date - timedelta(days=1)
     # specified date range 
     if period == '1D':
-        start_date = end_date - datetime.timedelta(days=1)
+        start_date = end_date - timedelta(days=1)
     elif period == '1W':
-        start_date = end_date - datetime.timedelta(days=7)
+        start_date = end_date - timedelta(days=7)
     elif period == '1M':
-        start_date = end_date - datetime.timedelta(days=30)
+        start_date = end_date - timedelta(days=30)
     elif period == 'YTD':
         start_date = end_date.strftime('%Y') + '-01-02'
     elif period == '6M':
-        start_date = end_date - datetime.timedelta(days=180)
+        start_date = end_date - timedelta(days=180)
     elif period == '1Y':
-        start_date = end_date - datetime.timedelta(days=365)
+        start_date = end_date - timedelta(days=365)
     elif period == '5Y':
-        start_date = end_date - datetime.timedelta(days=365*5)
+        start_date = end_date - timedelta(days=365*5)
     elif period == 'Max':
         start_date = k.index[0]
     elif period =='Manually': # user uses period instead of specific start date or end date
@@ -323,8 +320,9 @@ def balance_income_cash(stock,k,features):
     """
     helper function for stock_price funtion to display balance sheet, income statement and cashflow
     """
-    if stock in df['Company Name'].tolist(): #if user uses company name instead of ticker, convert company name to ticker
-        stock = df.loc[df['Company Name'] == stock].values[0][0]
+    #if stock in df['Company Name'].tolist(): #if user uses company name instead of ticker, convert company name to ticker
+    #    stock = df.loc[df['Company Name'] == stock].values[0][0]
+    stock = df.loc[df.Symbol_CompanyName == stock].values[0][0]
     if k == 'balance':
         r = pd.DataFrame((si.get_balance_sheet(stock))) #extract data from yf and store it in df 
     elif k == 'income':
@@ -375,7 +373,7 @@ def show_balance_income_cash(stock,k):
     button.on_click(on_button_clicked)
 
 def interactive_balance_income_cash():
-    c = widgets.interact(show_balance_income_cash,stock=widgets.Combobox(description='Company',placeholder='AAPL',options=df.Symbol.tolist() + df['Company Name'].tolist()),
+    c = widgets.interact(show_balance_income_cash,stock=widgets.Combobox(description='Company',placeholder='AAPL',options=df.Symbol_CompanyName.tolist()),
                          k=widgets.Dropdown(options=[('Balance Sheet','balance'),('Income Statement','income'),('Cashflow Statement','cash')],description='show'))
     
     display(c)
@@ -509,21 +507,25 @@ def portfolio(x='AAPL',weight='1',initial=10000,period='1Y',start_date=None,end_
             x_benchmark = x + ("," + benchmark if benchmark else "") # combine stocks in portfolio and benchmark stocks
             # set up the portfolio   
             if freq == 'Daily':   
-                rate_m =stock_data_2(x_benchmark,period=period,start_date_para=start_date,end_date_para=end_date)[2] # daily return
+                rate_d =stock_data_2(x_benchmark,period=period,start_date_para=start_date,end_date_para=end_date)[2] # daily return
+                rate_benchmark = rate_d.iloc[:,len(w):]  # cumulative returns for benchmark 
+                rate_portfolio = weight_return_portfolio(rate_d.iloc[:,:len(x.split(','))],w)   #w1 * r1 + w2 *r2 + .... + wn*rn
+                rate_portfolio.columns = ['Your Portfolio'] # rename column
+                s = summary_stats(rate_portfolio.resample('M').apply(erk.compound)) #summary statistics from daily to monthly 
             else:
                 rate_m = stock_data_2(x_benchmark,period=period,start_date_para=start_date,end_date_para=end_date)[1]#monthly return 
-
-            rate_portfolio = weight_return_portfolio(rate_m.iloc[:,:len(x.split(','))],w)   #w1 * r1 + w2 *r2 + .... + wn*rn
-            rate_portfolio.columns = ['Your Portfolio'] # rename column
-            
+                rate_portfolio = weight_return_portfolio(rate_m.iloc[:,:len(x.split(','))],w)   #w1 * r1 + w2 *r2 + .... + wn*rn
+                rate_benchmark = rate_m.iloc[:,len(w):]  # cumulative returns for benchmark
+                rate_portfolio.columns = ['Your Portfolio'] # rename column
+                s = summary_stats(rate_portfolio) #monthly summary stats
+                
             # if user types in benchmark
             if benchmark !='':
-                rate_benchmark = rate_m.iloc[:,len(w):]  # cumulative returns 
                 #ticker -> full name 
                 column_list = rate_benchmark.columns.to_list()
                 c = []
                 for i in rate_benchmark.columns.to_list():
-                    if i in list(df.Symbol):
+                    if i in list(df.Symbol): 
                         c.append(df.loc[df.Symbol ==i].values[0][1])  # get the company 's name from CSV file 
                     else:
                         c.append(i)
@@ -561,14 +563,10 @@ def portfolio(x='AAPL',weight='1',initial=10000,period='1Y',start_date=None,end_
             fig.show() # displaying graph
             
             # summary statistics
-            if rate_m.shape[0] > 250: # only show statistics if data is MORE than 1 year - 250 days of trading 
-                if freq =='Daily':
-                    s = summary_stats(rate_portfolio.resample('M').apply(erk.compound))
-                else:
-                    s = summary_stats(rate_portfolio)
-                s1 = pd.concat([ending_balance,s],axis=1) # combine ending balance with other statistics. 
-                s1.iloc[:,0] = s1.iloc[:,0].astype(float).map(lambda n: '${:,.2f}'.format(n)) # format ending balance 
-                display(s1) # display summary statistics
+            if rate_portfolio.index[-1] - rate_portfolio.index[0] >= timedelta(days=365) : # only show statistics if data is greater or equal than 1 year
+                final_summary_stats = pd.concat([ending_balance,s],axis=1) # combine ending balance with other statistics. 
+                final_summary_stats.iloc[:,0] = final_summary_stats.iloc[:,0].astype(float).map(lambda n: '${:,.2f}'.format(n)) # format ending balance 
+                display(final_summary_stats) # display summary statistics
                 
     button.on_click(on_button_clicked) 
     
